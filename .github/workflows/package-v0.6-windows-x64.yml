@@ -33,9 +33,10 @@ jobs:
           if ($actual -ne $env:SOURCE_SHA) {
             throw "Expected source commit $env:SOURCE_SHA but checked out $actual"
           }
-          $files = @(git ls-files)
-          if ($files.Count -ne 60) {
-            throw "Expected exactly 60 tracked source files; found $($files.Count)"
+          $tracked = @(git ls-files)
+          $sourceFiles = @($tracked | Where-Object { $_ -ne ".gitignore" })
+          if ($tracked.Count -ne 61 -or $sourceFiles.Count -ne 60) {
+            throw "Expected 60 archive source files plus the pre-existing .gitignore; found $($sourceFiles.Count) source files and $($tracked.Count) total files."
           }
           if (git status --porcelain) {
             throw "The immutable source checkout is not clean."
