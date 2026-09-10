@@ -13,7 +13,11 @@ declare global {
   interface Window {
     everiaWindow?: {
       onResponsiveScale(
-        callback: (value: { zoom: number; progress: number }) => void,
+        callback: (value: {
+          zoom: number;
+          progress: number;
+          homeProgress: number;
+        }) => void,
       ): () => void;
     };
     everiaProviders?: {
