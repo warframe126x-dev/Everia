@@ -258,7 +258,7 @@ jobs:
           let state;
           while (Date.now() < deadline) {
             const result = await command("Runtime.evaluate", {
-              expression: "JSON.stringify({readyState:document.readyState,title:document.title,bodyText:document.body?.innerText||'',categoryCards:document.querySelectorAll('.category-card').length,homeHeading:[...document.querySelectorAll('h1,h2')].some(element=>/Your Personal Universe/i.test(element.textContent||''))})",
+              expression: "JSON.stringify({readyState:document.readyState,title:document.title,bodyText:document.body?.innerText||'',categoryCards:document.querySelectorAll('.category-card').length,homeHeading:[...document.querySelectorAll('h1')].some(element=>/^EVERIA$/i.test((element.textContent||'').trim()))})",
               returnByValue: true
             });
             state = JSON.parse(result.result.value);
@@ -268,8 +268,8 @@ jobs:
           if (state?.readyState !== "complete" || !state?.homeHeading || state?.categoryCards !== 6) {
             throw new Error("Home screen did not render correctly: " + JSON.stringify(state));
           }
-          if (!state.bodyText.includes("Games") || !state.bodyText.includes("Anime")) {
-            throw new Error("Home screen category content is incomplete.");
+          if (!state.bodyText.includes("Your Personal Universe") || !state.bodyText.includes("Games") || !state.bodyText.includes("Anime")) {
+            throw new Error("Home screen branding or category content is incomplete.");
           }
 
           const screenshot = await command("Page.captureScreenshot", {
