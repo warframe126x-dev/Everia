@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const {
   centeredInitialBounds,
   resolveWindowState,
+  responsiveProgress,
   responsiveZoom,
 } = require("./window-state.cjs");
 
@@ -46,4 +47,39 @@ test("responsive zoom preserves baseline and reaches a bounded 2K scale", () => 
     ),
     1.333,
   );
+});
+
+test("responsive UI progress reaches the approved endpoint near 1080p maximized", () => {
+  const progress = responsiveProgress(
+    { width: 1920, height: 1040 },
+    primary,
+  );
+  assert.ok(progress > 0.95 && progress <= 1);
+});
+
+test("responsive UI progress preserves the 2K endpoint without over-scaling windowed views", () => {
+  const display = {
+    ...primary,
+    scaleFactor: 1.25,
+    workArea: { x: 0, y: 0, width: 2048, height: 1120 },
+  };
+  assert.equal(
+    responsiveProgress({ width: 2048, height: 1120 }, display),
+    1,
+  );
+  assert.ok(
+    responsiveProgress({ width: 1600, height: 900 }, display) < 0.15,
+  );
+});
+
+test("responsive UI progress is continuous between baseline and maximized sizes", () => {
+  const samples = [
+    { width: 1600, height: 900 },
+    { width: 1700, height: 950 },
+    { width: 1800, height: 1000 },
+    { width: 1920, height: 1040 },
+  ].map((bounds) => responsiveProgress(bounds, primary));
+  assert.equal(samples[0], 0);
+  assert.ok(samples.every((value, index) => index === 0 || value >= samples[index - 1]));
+  assert.ok(samples.every((value) => value >= 0 && value <= 1));
 });
