@@ -387,7 +387,7 @@ jobs:
 
           await command("Page.enable");
           await command("Runtime.enable");
-          const windowInfo = await command("Browser.getWindowForTarget", { targetId: page.id });
+          await evaluate("window.moveTo(0, 0)");
 
           await evaluate(`(() => {
             const items = Array.from({ length: 15 }, (_, index) => ({
@@ -415,14 +415,9 @@ jobs:
             { name: "1920x1080", width: 1920, height: 1080, minimumProgress: 0.65 },
             { name: "2560x1440", width: 2560, height: 1440, minimumProgress: 0.98 }
           ]) {
-            await command("Browser.setWindowBounds", {
-              windowId: windowInfo.windowId,
-              bounds: { windowState: "normal" }
-            });
-            await command("Browser.setWindowBounds", {
-              windowId: windowInfo.windowId,
-              bounds: { left: 0, top: 0, width: target.width, height: target.height }
-            });
+            await evaluate(
+              "window.resizeTo(" + target.width + ", " + target.height + ")",
+            );
             await pause(1500);
             await command("Page.reload");
             await waitFor(".home-page");
@@ -511,10 +506,7 @@ jobs:
               edit,
               settings,
               libraryBefore,
-              libraryWithScrollbar,
-              homeUnchangedByInteriorCurve:
-                home.homeBrandFactor === (1 + Math.max(0, Math.min(1, (home.outerWidth / home.innerWidth - 1) / (1 / 3))) * 0.125) ||
-                true
+              libraryWithScrollbar
             });
           }
 
