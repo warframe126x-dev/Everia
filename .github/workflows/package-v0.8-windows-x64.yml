@@ -297,6 +297,7 @@ jobs:
             JSON.stringify({ sourceCommit: process.env.SOURCE_SHA, launchedExecutable: "Everia.exe", rendered: true, ...state }, null, 2)
           );
           socket.close();
+          browserSocket.close();
           '@ | Set-Content $scriptPath -Encoding utf8
           node $scriptPath
 
@@ -387,7 +388,31 @@ jobs:
 
           await command("Page.enable");
           await command("Runtime.enable");
-          await evaluate("window.moveTo(0, 0)");
+          const browserVersionResponse = await fetch("http://127.0.0.1:9222/json/version");
+          if (!browserVersionResponse.ok) throw new Error("Electron browser endpoint is unavailable.");
+          const browserVersion = await browserVersionResponse.json();
+          const browserSocket = new WebSocket(browserVersion.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            browserSocket.addEventListener("open", resolve, { once: true });
+            browserSocket.addEventListener("error", reject, { once: true });
+          });
+          let browserNextId = 0;
+          const browserPending = new Map();
+          browserSocket.addEventListener("message", (event) => {
+            const message = JSON.parse(String(event.data));
+            const waiter = browserPending.get(message.id);
+            if (!waiter) return;
+            browserPending.delete(message.id);
+            message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);
+          });
+          const browserCommand = (method, params = {}) => new Promise((resolve, reject) => {
+            const id = ++browserNextId;
+            browserPending.set(id, { resolve, reject });
+            browserSocket.send(JSON.stringify({ id, method, params }));
+          });
+          const windowInfo = await browserCommand("Browser.getWindowForTarget", {
+            targetId: page.id
+          });
 
           await evaluate(`(() => {
             const items = Array.from({ length: 15 }, (_, index) => ({
@@ -415,9 +440,14 @@ jobs:
             { name: "1920x1080", width: 1920, height: 1080, minimumProgress: 0.65 },
             { name: "2560x1440", width: 2560, height: 1440, minimumProgress: 0.98 }
           ]) {
-            await evaluate(
-              "window.resizeTo(" + target.width + ", " + target.height + ")",
-            );
+            await browserCommand("Browser.setWindowBounds", {
+              windowId: windowInfo.windowId,
+              bounds: { windowState: "normal" }
+            });
+            await browserCommand("Browser.setWindowBounds", {
+              windowId: windowInfo.windowId,
+              bounds: { left: 0, top: 0, width: target.width, height: target.height }
+            });
             await pause(1500);
             await command("Page.reload");
             await waitFor(".home-page");
