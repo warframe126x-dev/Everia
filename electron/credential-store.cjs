@@ -84,7 +84,7 @@ function createCredentialStore({
           clientSecret: decrypt(record.clientSecret),
         };
       }
-      if (provider === "tmdb" && record.token)
+      if (["tmdb", "rawg", "omdb"].includes(provider) && record.token)
         return { token: decrypt(record.token) };
       return undefined;
     },
@@ -100,10 +100,15 @@ function createCredentialStore({
           clientId,
           clientSecret: encrypt(clientSecret),
         };
-      } else if (provider === "tmdb") {
+      } else if (["tmdb", "rawg", "omdb"].includes(provider)) {
         const token = String(input?.token || "").trim();
-        if (!token) throw new Error("API Read Access Token is required.");
-        document.providers.tmdb = { token: encrypt(token) };
+        if (!token)
+          throw new Error(
+            provider === "tmdb"
+              ? "API Read Access Token is required."
+              : "API key is required.",
+          );
+        document.providers[provider] = { token: encrypt(token) };
       } else {
         throw new Error("This provider does not use credentials.");
       }

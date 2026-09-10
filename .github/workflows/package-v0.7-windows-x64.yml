@@ -1,0 +1,373 @@
+name: Everia v0.7 Windows x64 package and launch test
+
+on:
+  push:
+    branches:
+      - v0.7
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-launch-test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+      V06_SHA: 762d79061d1bdf2bd99324a48095b6479db8d4a2
+      PACKAGE_DIR: release/Everia-win32-x64
+      VERIFICATION_DIR: verification
+      FINAL_ZIP: Everia-v0.7-windows-x64-launch-tested.zip
+
+    steps:
+      - name: Check out the exact v0.7 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify source lineage and immutable v0.6 baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:SOURCE_SHA) {
+            throw "Expected source commit $env:SOURCE_SHA but checked out $actual"
+          }
+          if ((git rev-parse "v0.6^{commit}").Trim() -ne $env:V06_SHA) {
+            throw "The immutable v0.6 tag no longer points to the verified baseline."
+          }
+          if ((git merge-base $env:V06_SHA $env:SOURCE_SHA).Trim() -ne $env:V06_SHA) {
+            throw "The v0.7 source is not descended from the verified v0.6 baseline."
+          }
+          if (git status --porcelain) { throw "The source checkout is not clean." }
+          New-Item -ItemType Directory -Force -Path $env:VERIFICATION_DIR | Out-Null
+          git ls-files -s | Set-Content "$env:VERIFICATION_DIR/source-tree.txt" -Encoding utf8
+          git diff --name-status $env:V06_SHA $env:SOURCE_SHA |
+            Set-Content "$env:VERIFICATION_DIR/v0.7-changed-files.txt" -Encoding utf8
+          $env:SOURCE_SHA | Set-Content "$env:VERIFICATION_DIR/SOURCE_COMMIT.txt" -Encoding ascii
+
+      - name: Use Node.js 22 x64
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          architecture: x64
+          cache: npm
+
+      - name: Install exact locked dependencies
+        shell: pwsh
+        run: npm ci
+
+      - name: Run tests and production build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm test
+          npm run test:ui
+          npm run build
+          git diff --exit-code -- .
+          if ((git rev-parse HEAD).Trim() -ne $env:SOURCE_SHA) {
+            throw "Source commit changed during build."
+          }
+
+      - name: Package Windows x64 from the exact source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packagerArgs = @(
+            "--no-install"
+            "electron-packager"
+            "."
+            "Everia"
+            "--platform=win32"
+            "--arch=x64"
+            "--app-version=0.7.0"
+            "--build-version=0.7.0"
+            "--icon=public/assets/branding/everia-windows-icon.ico"
+            "--out=release"
+            "--overwrite"
+            "--asar"
+            "--prune=true"
+            "--ignore=^/(src|upload|release|verification|node_modules/.cache)(/|$)"
+            "--ignore=\.(zip|tsbuildinfo)$"
+            "--ignore=^/.*\.(spec\.tsx|test\.ts|providers\.test\.cjs|credential-store\.test\.cjs|window-state\.test\.cjs)$"
+            "--win32metadata.CompanyName=Everia"
+            "--win32metadata.FileDescription=Everia — Your Personal Universe"
+            "--win32metadata.ProductName=Everia"
+            "--win32metadata.InternalName=Everia"
+            "--win32metadata.OriginalFilename=Everia.exe"
+          )
+          & npx @packagerArgs
+          if ($LASTEXITCODE -ne 0) { throw "electron-packager failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path "$env:PACKAGE_DIR/Everia.exe")) {
+            throw "Packaging did not produce Everia.exe."
+          }
+
+      - name: Verify PE architecture, metadata, icon, and manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = (Resolve-Path "$env:PACKAGE_DIR/Everia.exe").Path
+          $stream = [System.IO.File]::OpenRead($exe)
+          try {
+            $reader = [System.IO.BinaryReader]::new($stream)
+            if ($reader.ReadUInt16() -ne 0x5A4D) { throw "Everia.exe has no MZ header." }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) { throw "Everia.exe has no PE header." }
+            $machine = $reader.ReadUInt16()
+          } finally {
+            $stream.Dispose()
+          }
+          if ($machine -ne 0x8664) {
+            throw ("Everia.exe is not Windows x64; PE machine is 0x{0:X4}" -f $machine)
+          }
+
+          $version = (Get-Item $exe).VersionInfo
+          if ($version.ProductName -ne "Everia") { throw "Incorrect ProductName: $($version.ProductName)" }
+          if ($version.InternalName -ne "Everia") { throw "Incorrect InternalName: $($version.InternalName)" }
+          if ($version.OriginalFilename -ne "Everia.exe") { throw "Incorrect OriginalFilename: $($version.OriginalFilename)" }
+          if ($version.FileDescription -ne "Everia — Your Personal Universe") {
+            throw "Incorrect FileDescription: $($version.FileDescription)"
+          }
+          if (-not $version.ProductVersion.StartsWith("0.7.0")) {
+            throw "Incorrect ProductVersion: $($version.ProductVersion)"
+          }
+
+          Add-Type -AssemblyName System.Drawing
+          $expectedIcon = [System.Drawing.Icon]::new(
+            (Resolve-Path "public/assets/branding/everia-windows-icon.ico").Path,
+            32,
+            32
+          )
+          $actualIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          try {
+            $expectedBitmap = $expectedIcon.ToBitmap()
+            $actualBitmap = $actualIcon.ToBitmap()
+            if ($expectedBitmap.Width -ne $actualBitmap.Width -or $expectedBitmap.Height -ne $actualBitmap.Height) {
+              throw "Executable icon dimensions do not match the Everia icon."
+            }
+            for ($y = 0; $y -lt $expectedBitmap.Height; $y++) {
+              for ($x = 0; $x -lt $expectedBitmap.Width; $x++) {
+                if ($expectedBitmap.GetPixel($x, $y).ToArgb() -ne $actualBitmap.GetPixel($x, $y).ToArgb()) {
+                  throw "Everia.exe does not contain the expected Everia icon."
+                }
+              }
+            }
+            $actualBitmap.Save(
+              (Join-Path (Resolve-Path $env:VERIFICATION_DIR).Path "everia-extracted-icon.png"),
+              [System.Drawing.Imaging.ImageFormat]::Png
+            )
+          } finally {
+            if ($expectedBitmap) { $expectedBitmap.Dispose() }
+            if ($actualBitmap) { $actualBitmap.Dispose() }
+            $expectedIcon.Dispose()
+            $actualIcon.Dispose()
+          }
+
+          [ordered]@{
+            sourceCommit = $env:SOURCE_SHA
+            baselineCommit = $env:V06_SHA
+            peMachine = ("0x{0:X4}" -f $machine)
+            architecture = "Windows x64"
+            productName = $version.ProductName
+            internalName = $version.InternalName
+            originalFilename = $version.OriginalFilename
+            fileDescription = $version.FileDescription
+            fileVersion = $version.FileVersion
+            productVersion = $version.ProductVersion
+            executableSha256 = (Get-FileHash $exe -Algorithm SHA256).Hash
+          } | ConvertTo-Json | Set-Content "$env:VERIFICATION_DIR/executable-verification.json" -Encoding utf8
+
+          $packageRoot = (Resolve-Path $env:PACKAGE_DIR).Path
+          Get-ChildItem $packageRoot -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($packageRoot, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            } | Set-Content "$env:VERIFICATION_DIR/package-manifest-before-launch.txt" -Encoding utf8
+
+      - name: Launch the packaged Everia.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = (Resolve-Path "$env:PACKAGE_DIR/Everia.exe").Path
+          $profile = Join-Path $env:RUNNER_TEMP "everia-v07-launch-profile"
+          $process = Start-Process -FilePath $exe -ArgumentList @(
+            "--remote-debugging-port=9222",
+            "--user-data-dir=$profile"
+          ) -PassThru
+          $process.Id | Set-Content "$env:VERIFICATION_DIR/everia.pid" -Encoding ascii
+          Start-Sleep -Seconds 3
+          if ($process.HasExited) {
+            throw "Everia.exe exited before its Home screen could be inspected. Exit code: $($process.ExitCode)"
+          }
+
+      - name: Prove the Home screen rendered without overflow
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $scriptPath = Join-Path $env:RUNNER_TEMP "verify-everia-home.mjs"
+          @'
+          import fs from "node:fs";
+          import path from "node:path";
+
+          const deadline = Date.now() + 60000;
+          let page;
+          while (Date.now() < deadline) {
+            try {
+              const response = await fetch("http://127.0.0.1:9222/json/list");
+              if (response.ok) {
+                const targets = await response.json();
+                page = targets.find((target) => target.type === "page" && String(target.url).startsWith("file:"));
+                if (page?.webSocketDebuggerUrl) break;
+              }
+            } catch {}
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+          if (!page?.webSocketDebuggerUrl) throw new Error("Everia did not expose a rendered page within 60 seconds.");
+
+          const socket = new WebSocket(page.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            socket.addEventListener("open", resolve, { once: true });
+            socket.addEventListener("error", reject, { once: true });
+          });
+          let nextId = 0;
+          const pending = new Map();
+          socket.addEventListener("message", (event) => {
+            const message = JSON.parse(String(event.data));
+            const waiter = pending.get(message.id);
+            if (!waiter) return;
+            pending.delete(message.id);
+            message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);
+          });
+          const command = (method, params = {}) => new Promise((resolve, reject) => {
+            const id = ++nextId;
+            pending.set(id, { resolve, reject });
+            socket.send(JSON.stringify({ id, method, params }));
+          });
+
+          await command("Page.enable");
+          await command("Runtime.enable");
+          let state;
+          while (Date.now() < deadline) {
+            const result = await command("Runtime.evaluate", {
+              expression: `JSON.stringify((() => {
+                const root = document.documentElement;
+                const names = [...document.querySelectorAll('.category-card strong')].map((element) => element.textContent?.trim());
+                return {
+                  readyState: document.readyState,
+                  title: document.title,
+                  bodyText: document.body?.innerText || '',
+                  homeHeading: [...document.querySelectorAll('h1')].some((element) => /^EVERIA$/i.test((element.textContent || '').trim())),
+                  categoryCards: document.querySelectorAll('.category-card').length,
+                  categoryNames: names,
+                  horizontalOverflow: root.scrollWidth > root.clientWidth,
+                  verticalOverflow: root.scrollHeight > root.clientHeight
+                };
+              })())`,
+              returnByValue: true
+            });
+            state = JSON.parse(result.result.value);
+            if (state.readyState === "complete" && state.homeHeading && state.categoryCards === 6) break;
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+          const expected = ["Games", "Movies", "TV Shows", "Novels", "Manga", "Anime"];
+          if (state?.readyState !== "complete" || !state?.homeHeading || state?.categoryCards !== 6) {
+            throw new Error("Home screen did not render correctly: " + JSON.stringify(state));
+          }
+          if (expected.some((name) => !state.categoryNames.includes(name))) {
+            throw new Error("Home screen is missing a category: " + JSON.stringify(state));
+          }
+          if (state.horizontalOverflow || state.verticalOverflow) {
+            throw new Error("Home screen overflowed its content viewport: " + JSON.stringify(state));
+          }
+          if (!state.bodyText.includes("Your Personal Universe")) throw new Error("Home branding is incomplete.");
+
+          const screenshot = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+          fs.writeFileSync(path.join(process.env.VERIFICATION_DIR, "everia-home-screen.png"), Buffer.from(screenshot.data, "base64"));
+          fs.writeFileSync(
+            path.join(process.env.VERIFICATION_DIR, "home-screen-verification.json"),
+            JSON.stringify({ sourceCommit: process.env.SOURCE_SHA, launchedExecutable: "Everia.exe", rendered: true, ...state }, null, 2)
+          );
+          socket.close();
+          '@ | Set-Content $scriptPath -Encoding utf8
+          node $scriptPath
+
+      - name: Stop Everia after launch validation
+        if: always()
+        shell: pwsh
+        run: |
+          $pidFile = "$env:VERIFICATION_DIR/everia.pid"
+          if (Test-Path $pidFile) {
+            $everiaPid = [int](Get-Content $pidFile)
+            Stop-Process -Id $everiaPid -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Prove tested package unchanged and create delivery ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageRoot = (Resolve-Path $env:PACKAGE_DIR).Path
+          $afterManifest = Get-ChildItem $packageRoot -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($packageRoot, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            }
+          $beforeManifest = Get-Content "$env:VERIFICATION_DIR/package-manifest-before-launch.txt"
+          if (Compare-Object $beforeManifest $afterManifest) {
+            throw "The packaged application changed during launch testing."
+          }
+          $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
+
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v0.7-windows-x64-launch-tested"
+          New-Item -ItemType Directory -Force -Path $delivery | Out-Null
+          Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
+          Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
+          @(
+            "Everia v0.7 Windows x64"
+            "Built from exact source commit: $env:SOURCE_SHA"
+            "Everia-win32-x64/Everia.exe is the exact executable that passed the launch and Home-screen test."
+          ) | Set-Content (Join-Path $delivery "README-FIRST.txt") -Encoding utf8
+
+          Compress-Archive -Path "$delivery/*" -DestinationPath $env:FINAL_ZIP -CompressionLevel Optimal
+          $extract = Join-Path $env:RUNNER_TEMP "everia-final-zip-check"
+          Expand-Archive -Path $env:FINAL_ZIP -DestinationPath $extract
+          $zippedPackage = Join-Path $extract "Everia-win32-x64"
+          $zippedManifest = Get-ChildItem $zippedPackage -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($zippedPackage, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            }
+          if (Compare-Object $afterManifest $zippedManifest) {
+            throw "The final ZIP does not contain the exact launch-tested package."
+          }
+
+          [ordered]@{
+            sourceCommit = $env:SOURCE_SHA
+            finalZip = $env:FINAL_ZIP
+            finalZipSha256 = (Get-FileHash $env:FINAL_ZIP -Algorithm SHA256).Hash
+            executableSha256 = (Get-FileHash "$zippedPackage/Everia.exe" -Algorithm SHA256).Hash
+            matchesLaunchTestedPackage = $true
+          } | ConvertTo-Json | Set-Content "$env:VERIFICATION_DIR/final-zip-verification.json" -Encoding utf8
+
+      - name: Upload exact launch-tested delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: Everia-v0.7-windows-x64-launch-tested
+          path: Everia-v0.7-windows-x64-launch-tested.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload launch evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Everia-v0.7-windows-x64-verification
+          path: verification
+          if-no-files-found: error
+          retention-days: 30

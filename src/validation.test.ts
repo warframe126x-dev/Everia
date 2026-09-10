@@ -38,3 +38,20 @@ test("rejects malformed collections and out-of-range ratings", () => {
   ])
     assert.throws(() => validateItems(value));
 });
+test("accepts v0.7 provider references without changing local fields", () => {
+  for (const provider of ["rawg", "omdb", "tenrai"]) {
+    const item = validateItems([
+      {
+        ...base,
+        notes: "Owned by Everia",
+        providerReference: {
+          provider,
+          providerId: "source-id",
+          importedAt: "2026-09-10",
+        },
+      },
+    ])[0];
+    assert.equal(item.notes, "Owned by Everia");
+    assert.equal(item.providerReference?.provider, provider);
+  }
+});

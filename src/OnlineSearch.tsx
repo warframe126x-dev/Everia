@@ -1,8 +1,13 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { categoryInfo } from "./data";
-import { providerForCategory, type ImportCandidate } from "./providers";
-import { categories, type Category } from "./types";
+import {
+  providerById,
+  providerForCategory,
+  searchProviderChain,
+  type ImportCandidate,
+} from "./providers";
+import { categories, type Category, type ProviderId } from "./types";
 
 export function OnlineSearch({
   category,
@@ -19,18 +24,20 @@ export function OnlineSearch({
 }) {
   const provider = providerForCategory(category);
   const [query, setQuery] = useState("");
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState(Boolean(window.everiaProviders));
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<ImportCandidate[]>([]);
   const [selected, setSelected] = useState<ImportCandidate>();
   const [detailsFailed, setDetailsFailed] = useState(false);
+  const [resultSource, setResultSource] = useState<ProviderId>();
 
   useEffect(() => {
     let active = true;
     setResults([]);
     setSelected(undefined);
     setDetailsFailed(false);
+    setResultSource(undefined);
     if (!provider) {
       setAvailable(false);
       setMessage(
@@ -42,8 +49,8 @@ export function OnlineSearch({
     }
     provider.status().then((status) => {
       if (!active) return;
-      setAvailable(status.available);
-      setMessage(status.reason ?? "");
+      setAvailable(Boolean(window.everiaProviders));
+      if (!window.everiaProviders) setMessage(status.reason ?? "");
     });
     return () => {
       active = false;
@@ -56,11 +63,16 @@ export function OnlineSearch({
     setMessage("");
     setSelected(undefined);
     try {
-      const next = await provider.search(query.trim(), category);
-      setResults(next);
-      if (!next.length) setMessage("No matching entries were found.");
+      const response = await searchProviderChain(query.trim(), category);
+      setResults(response.results);
+      setResultSource(response.provider);
+      setMessage(
+        response.notice ||
+          (!response.results.length ? "No matching entries were found." : ""),
+      );
     } catch (error) {
       setResults([]);
+      setResultSource(undefined);
       setMessage(
         error instanceof Error
           ? error.message
@@ -73,12 +85,12 @@ export function OnlineSearch({
 
   const useSelected = async () => {
     if (!selected) return;
-    if (!provider) return;
+    const resultProvider = providerById(selected.provider);
     setBusy(true);
     setMessage("");
     setDetailsFailed(false);
     try {
-      onUse(await provider.getDetails(selected.providerId, category));
+      onUse(await resultProvider.getDetails(selected.providerId, category));
     } catch (error) {
       setDetailsFailed(true);
       setMessage(
@@ -113,7 +125,7 @@ export function OnlineSearch({
             <Search />
             <input
               value={query}
-              disabled={!available}
+              disabled={!available || busy}
               placeholder="Search by title..."
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -138,12 +150,19 @@ export function OnlineSearch({
       {message && (
         <div className="online-message">
           <p>{message}</p>
-          {!available &&
-            (provider?.id === "igdb" || provider?.id === "tmdb") && (
+          {(category === "games" ||
+            category === "movies" ||
+            category === "tv-series") &&
+            message.includes("unavailable") && (
               <button type="button" className="secondary" onClick={onConfigure}>
                 Configure
               </button>
             )}
+          {message.includes("Manual Entry") && (
+            <button type="button" className="secondary" onClick={onManual}>
+              Manual Entry
+            </button>
+          )}
         </div>
       )}
 
@@ -243,6 +262,14 @@ export function OnlineSearch({
             ))}
           </div>
         )
+      )}
+      {resultSource === "rawg" && results.length > 0 && (
+        <p className="result-attribution">
+          Game metadata by{" "}
+          <a href="https://rawg.io/" target="_blank" rel="noreferrer">
+            RAWG
+          </a>
+        </p>
       )}
     </div>
   );

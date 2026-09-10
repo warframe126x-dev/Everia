@@ -62,7 +62,15 @@ export function validateItems(value: unknown): MediaItem[] {
       if (
         !reference ||
         typeof reference !== "object" ||
-        !["igdb", "tmdb", "ranobedb", "jikan"].includes(reference.provider) ||
+        ![
+          "igdb",
+          "rawg",
+          "tmdb",
+          "omdb",
+          "ranobedb",
+          "tenrai",
+          "jikan",
+        ].includes(reference.provider) ||
         typeof reference.providerId !== "string" ||
         !reference.providerId ||
         typeof reference.importedAt !== "string" ||

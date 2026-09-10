@@ -98,6 +98,27 @@ test("online source failure leaves manual entry available", async () => {
   expect(screen.getByLabelText("Title")).toBeDefined();
 });
 
+test("provider initialization never blocks Add Item search", async () => {
+  vi.stubGlobal("everiaProviders", {
+    status: vi.fn().mockReturnValue(new Promise(() => {})),
+    searchChain: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { provider: "igdb", providerName: "IGDB", results: [] },
+    }),
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Games/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+  const query = await screen.findByPlaceholderText("Search by title...");
+  expect((query as HTMLInputElement).disabled).toBe(false);
+  fireEvent.change(query, { target: { value: "Ready" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  expect(
+    await screen.findByText("No matching entries were found."),
+  ).toBeDefined();
+  expect(screen.getByRole("button", { name: "Manual entry" })).toBeDefined();
+});
+
 test("normalized online result opens a preview then the existing manual review form", async () => {
   vi.stubGlobal("everiaProviders", {
     status: vi.fn().mockResolvedValue({
@@ -109,18 +130,22 @@ test("normalized online result opens a preview then the existing manual review f
         available: true,
       },
     }),
-    search: vi.fn().mockResolvedValue({
+    searchChain: vi.fn().mockResolvedValue({
       ok: true,
-      data: [
-        {
-          provider: "igdb",
-          providerName: "IGDB",
-          providerId: "1",
-          category: "games",
-          title: "Online game",
-          cacheCover: false,
-        },
-      ],
+      data: {
+        provider: "igdb",
+        providerName: "IGDB",
+        results: [
+          {
+            provider: "igdb",
+            providerName: "IGDB",
+            providerId: "1",
+            category: "games",
+            title: "Online game",
+            cacheCover: false,
+          },
+        ],
+      },
     }),
     details: vi.fn().mockResolvedValue({
       ok: true,

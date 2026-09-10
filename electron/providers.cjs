@@ -1,25 +1,62 @@
 const PROVIDERS = {
-  igdb: { name: "IGDB", categories: ["games"], requiresCredentials: true },
+  igdb: {
+    name: "IGDB",
+    categories: ["games"],
+    requiresCredentials: true,
+    role: "primary",
+  },
+  rawg: {
+    name: "RAWG",
+    categories: ["games"],
+    requiresCredentials: true,
+    role: "backup",
+  },
   tmdb: {
     name: "TMDB",
     categories: ["movies", "tv-series"],
     requiresCredentials: true,
+    role: "primary",
+  },
+  omdb: {
+    name: "OMDb",
+    categories: ["movies", "tv-series"],
+    requiresCredentials: true,
+    role: "backup",
   },
   ranobedb: {
     name: "RanobeDB",
     categories: ["novels"],
     requiresCredentials: false,
+    role: "primary",
+  },
+  tenrai: {
+    name: "Tenrai",
+    categories: ["anime", "manga"],
+    requiresCredentials: false,
+    role: "primary",
   },
   jikan: {
     name: "Jikan",
     categories: ["anime", "manga"],
     requiresCredentials: false,
+    role: "backup",
   },
+};
+
+const PROVIDER_CHAINS = {
+  games: ["igdb", "rawg"],
+  movies: ["tmdb", "omdb"],
+  "tv-series": ["tmdb", "omdb"],
+  novels: ["ranobedb"],
+  anime: ["tenrai", "jikan"],
+  manga: ["tenrai", "jikan"],
 };
 
 const ALLOWED_IMAGE_HOSTS = new Set([
   "images.igdb.com",
   "image.tmdb.org",
+  "media.rawg.io",
+  "m.media-amazon.com",
   "images.ranobedb.org",
   "cdn.myanimelist.net",
 ]);
@@ -50,7 +87,20 @@ function credentialsFor(provider) {
   }
   if (provider === "tmdb" && process.env.EVERIA_TMDB_TOKEN)
     return { token: process.env.EVERIA_TMDB_TOKEN };
+  if (provider === "rawg" && process.env.EVERIA_RAWG_API_KEY)
+    return { token: process.env.EVERIA_RAWG_API_KEY };
+  if (provider === "omdb" && process.env.EVERIA_OMDB_API_KEY)
+    return { token: process.env.EVERIA_OMDB_API_KEY };
   return undefined;
+}
+
+class ProviderError extends Error {
+  constructor(message, code, failoverEligible = false) {
+    super(message);
+    this.name = "ProviderError";
+    this.code = code;
+    this.failoverEligible = failoverEligible;
+  }
 }
 
 function providerStatus(id) {
@@ -119,17 +169,23 @@ async function fetchResponse(
         ...init,
         signal: AbortSignal.timeout(timeoutMs),
       });
-    } catch {
+    } catch (error) {
       if (attempt + 1 < attempts) {
         await delay(350 * (attempt + 1));
         continue;
       }
-      throw new Error(
+      throw new ProviderError(
         `Unable to reach ${providerName} right now. Your Everia library is unaffected.`,
+        error?.name === "TimeoutError" ? "timeout" : "network",
+        true,
       );
     }
     if (response.status === 401 || response.status === 403)
-      throw new Error(`${providerName} rejected the saved credentials.`);
+      throw new ProviderError(
+        `${providerName} rejected the saved credentials.`,
+        "credentials",
+        true,
+      );
     if (
       (response.status === 429 || [502, 503, 504].includes(response.status)) &&
       attempt + 1 < attempts
@@ -143,10 +199,16 @@ async function fetchResponse(
       continue;
     }
     if (response.status === 429)
-      throw new Error(`${providerName} is busy. Please wait a moment and retry.`);
-    if ([502, 503, 504].includes(response.status))
-      throw new Error(
+      throw new ProviderError(
+        `${providerName} is busy. Please wait a moment and retry.`,
+        "rate-limit",
+        true,
+      );
+    if (response.status >= 500)
+      throw new ProviderError(
         `${providerName} is temporarily unavailable because its upstream service did not respond. Your Everia library is unaffected.`,
+        "unavailable",
+        true,
       );
     if (!response.ok)
       throw new Error(
@@ -163,8 +225,10 @@ async function fetchJson(url, init, providerName, options) {
   try {
     return await response.json();
   } catch {
-    throw new Error(
+    throw new ProviderError(
       `${providerName || "The online source"} returned an unreadable response.`,
+      "unavailable",
+      true,
     );
   }
 }
@@ -290,6 +354,60 @@ async function detailsIgdb(id) {
   return normalizeIgdb(games[0]);
 }
 
+function rawgCredentials() {
+  const credentials = credentialsFor("rawg");
+  if (!credentials) throw new Error(providerStatus("rawg").reason);
+  return credentials;
+}
+function normalizeRawg(game) {
+  const developers = names(game.developers);
+  const publishers = names(game.publishers);
+  const platforms = names(
+    (game.platforms || []).map((value) => value.platform),
+  );
+  return {
+    provider: "rawg",
+    providerName: "RAWG",
+    providerId: String(game.id),
+    providerUrl: game.slug
+      ? `https://rawg.io/games/${game.slug}`
+      : "https://rawg.io/",
+    category: "games",
+    title: game.name,
+    creator: developers.join(", ") || undefined,
+    contributors: publishers.join(", ") || undefined,
+    releaseDate: textOrUndefined(game.released),
+    genres: names(game.genres),
+    platform: platforms.join(", ") || undefined,
+    description: textOrUndefined(game.description_raw),
+    coverUrl: textOrUndefined(game.background_image),
+    cacheCover: Boolean(game.background_image),
+    metadata: { developers, publishers, platforms },
+  };
+}
+async function rawgRequest(pathname, params = {}) {
+  const credentials = rawgCredentials();
+  const query = new URLSearchParams({ key: credentials.token, ...params });
+  return fetchJson(
+    `https://api.rawg.io/api/${pathname}?${query}`,
+    { headers: { Accept: "application/json" } },
+    "RAWG",
+    { attempts: 2, timeoutMs: 12000 },
+  );
+}
+async function searchRawg(query) {
+  const data = await rawgRequest("games", {
+    search: query,
+    search_precise: "true",
+    page_size: "20",
+  });
+  return (data.results || []).map(normalizeRawg);
+}
+async function detailsRawg(id) {
+  if (!/^\d+$/.test(id)) throw new Error("Invalid RAWG item.");
+  return normalizeRawg(await rawgRequest(`games/${id}`));
+}
+
 function tmdbHeaders() {
   const credentials = credentialsFor("tmdb");
   if (!credentials) throw new Error(providerStatus("tmdb").reason);
@@ -366,6 +484,89 @@ async function detailsTmdb(id, category) {
     "TMDB",
   );
   return normalizeTmdb(data, category);
+}
+
+function omdbCredentials() {
+  const credentials = credentialsFor("omdb");
+  if (!credentials) throw new Error(providerStatus("omdb").reason);
+  return credentials;
+}
+function omdbDate(value) {
+  const text = textOrUndefined(value);
+  if (!text || text === "N/A") return undefined;
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.valueOf())) return parsed.toISOString().slice(0, 10);
+  const year = text.match(/\d{4}/)?.[0];
+  return year;
+}
+function omdbValues(value) {
+  return value && value !== "N/A"
+    ? value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+    : [];
+}
+function normalizeOmdb(item, category) {
+  const id = String(item.imdbID);
+  const creators = omdbValues(item.Director);
+  const writers = omdbValues(item.Writer);
+  const actors = omdbValues(item.Actors);
+  const runtime = Number.parseInt(item.Runtime, 10);
+  const seasons = Number.parseInt(item.totalSeasons, 10);
+  return {
+    provider: "omdb",
+    providerName: "OMDb",
+    providerId: id,
+    providerUrl: `https://www.imdb.com/title/${id}/`,
+    category,
+    title: item.Title,
+    creator: creators.join(", ") || undefined,
+    contributors: [...writers, ...actors].join(", ") || undefined,
+    releaseDate: omdbDate(item.Released || item.Year),
+    genres: omdbValues(item.Genre),
+    description: item.Plot !== "N/A" ? item.Plot : undefined,
+    coverUrl: item.Poster && item.Poster !== "N/A" ? item.Poster : undefined,
+    cacheCover: Boolean(item.Poster && item.Poster !== "N/A"),
+    metadata: {
+      creators,
+      runtimeMinutes: Number.isFinite(runtime) ? runtime : undefined,
+      seasons: Number.isFinite(seasons) ? seasons : undefined,
+      providerStatus: item.Released,
+    },
+  };
+}
+async function omdbRequest(params) {
+  const credentials = omdbCredentials();
+  const query = new URLSearchParams({ apikey: credentials.token, ...params });
+  const data = await fetchJson(
+    `https://www.omdbapi.com/?${query}`,
+    { headers: { Accept: "application/json" } },
+    "OMDb",
+    { attempts: 2, timeoutMs: 12000 },
+  );
+  if (data.Response === "False") {
+    if (data.Error === "Movie not found!") return data;
+    throw new Error(data.Error || "OMDb returned an error.");
+  }
+  return data;
+}
+async function searchOmdb(query, category) {
+  const data = await omdbRequest({
+    s: query,
+    type: category === "movies" ? "movie" : "series",
+    page: "1",
+  });
+  return (data.Search || [])
+    .slice(0, 20)
+    .map((item) => normalizeOmdb(item, category));
+}
+async function detailsOmdb(id, category) {
+  if (!/^tt\d+$/.test(id)) throw new Error("Invalid OMDb item.");
+  const data = await omdbRequest({ i: id, plot: "full" });
+  if (data.Response === "False")
+    throw new Error("This OMDb item is no longer available.");
+  return normalizeOmdb(data, category);
 }
 
 function ranobeCover(image) {
@@ -463,7 +664,7 @@ function jikanTitles(item) {
     item.title_japanese,
   ]).filter((x) => x !== item.title);
 }
-function normalizeJikan(item, category) {
+function normalizeMalCompatible(item, category, provider = "jikan") {
   const anime = category === "anime";
   const people = names(item.authors);
   const studios = names(item.studios);
@@ -474,8 +675,8 @@ function normalizeJikan(item, category) {
   const alternateTitles = jikanTitles(item);
   const originalTitle = item.title_japanese || undefined;
   return {
-    provider: "jikan",
-    providerName: "Jikan",
+    provider,
+    providerName: provider === "tenrai" ? "Tenrai" : "Jikan",
     providerId: String(item.mal_id),
     providerUrl: item.url,
     category,
@@ -513,6 +714,41 @@ function normalizeJikan(item, category) {
     },
   };
 }
+async function searchTenrai(query, category) {
+  const type = category === "anime" ? "anime" : "manga";
+  const params = new URLSearchParams({ q: query, limit: "20", sfw: "true" });
+  const data = await fetchJson(
+    `https://api.tenrai.org/v1/${type}?${params}`,
+    {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Everia/0.7 (Windows desktop media library)",
+      },
+    },
+    "Tenrai",
+    { attempts: 2, timeoutMs: 12000 },
+  );
+  return (data.data || []).map((item) =>
+    normalizeMalCompatible(item, category, "tenrai"),
+  );
+}
+async function detailsTenrai(id, category) {
+  if (!/^\d+$/.test(id)) throw new Error("Invalid Tenrai item.");
+  const type = category === "anime" ? "anime" : "manga";
+  const data = await fetchJson(
+    `https://api.tenrai.org/v1/${type}/${id}/full`,
+    {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Everia/0.7 (Windows desktop media library)",
+      },
+    },
+    "Tenrai",
+    { attempts: 2, timeoutMs: 12000 },
+  );
+  if (!data.data) throw new Error("This Tenrai item is no longer available.");
+  return normalizeMalCompatible(data.data, category, "tenrai");
+}
 async function searchJikan(query, category) {
   const type = category === "anime" ? "anime" : "manga";
   const params = new URLSearchParams({ q: query, limit: "20", sfw: "true" });
@@ -521,13 +757,15 @@ async function searchJikan(query, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.6 (Windows desktop media library)",
+        "User-Agent": "Everia/0.7 (Windows desktop media library)",
       },
     },
     "Jikan",
     { attempts: 2, timeoutMs: 12000 },
   );
-  return (data.data || []).map((item) => normalizeJikan(item, category));
+  return (data.data || []).map((item) =>
+    normalizeMalCompatible(item, category, "jikan"),
+  );
 }
 async function detailsJikan(id, category) {
   if (!/^\d+$/.test(id)) throw new Error("Invalid Jikan item.");
@@ -537,14 +775,14 @@ async function detailsJikan(id, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.6 (Windows desktop media library)",
+        "User-Agent": "Everia/0.7 (Windows desktop media library)",
       },
     },
     "Jikan",
     { attempts: 2, timeoutMs: 12000 },
   );
   if (!data.data) throw new Error("This Jikan item is no longer available.");
-  return normalizeJikan(data.data, category);
+  return normalizeMalCompatible(data.data, category, "jikan");
 }
 
 async function search({ provider, query, category }) {
@@ -557,17 +795,58 @@ async function search({ provider, query, category }) {
     const result =
       provider === "igdb"
         ? await searchIgdb(trimmed)
-        : provider === "tmdb"
-          ? await searchTmdb(trimmed, category)
-          : provider === "ranobedb"
-            ? await searchRanobe(trimmed)
-            : await searchJikan(trimmed, category);
+        : provider === "rawg"
+          ? await searchRawg(trimmed)
+          : provider === "tmdb"
+            ? await searchTmdb(trimmed, category)
+            : provider === "omdb"
+              ? await searchOmdb(trimmed, category)
+              : provider === "ranobedb"
+                ? await searchRanobe(trimmed)
+                : provider === "tenrai"
+                  ? await searchTenrai(trimmed, category)
+                  : await searchJikan(trimmed, category);
     connectionStates.set(provider, "connected");
     return result;
   } catch (error) {
     connectionStates.set(provider, "connection-failed");
     throw error;
   }
+}
+async function searchChain({ query, category }) {
+  const chain = PROVIDER_CHAINS[category];
+  if (!chain)
+    throw new Error("Online search is not available for this category.");
+  const failures = [];
+  for (const provider of chain) {
+    const status = providerStatus(provider);
+    if (!status.available) {
+      failures.push({ provider, name: status.name, reason: status.reason });
+      continue;
+    }
+    try {
+      const results = await search({ provider, query, category });
+      const firstFailure = failures[0];
+      return {
+        results,
+        provider,
+        providerName: status.name,
+        fallbackFrom: firstFailure?.name,
+        notice: firstFailure
+          ? `${firstFailure.name} unavailable — using ${status.name}`
+          : undefined,
+      };
+    } catch (error) {
+      if (!(error instanceof ProviderError) || !error.failoverEligible)
+        throw error;
+      failures.push({ provider, name: status.name, reason: error.message });
+    }
+  }
+  const names = chain.map((provider) => PROVIDERS[provider].name).join(" and ");
+  throw new ProviderError(
+    `${names} are temporarily unavailable. Manual Entry remains available.`,
+    "all-unavailable",
+  );
 }
 async function details({ provider, providerId, category }) {
   validateRequest(provider, category);
@@ -576,11 +855,17 @@ async function details({ provider, providerId, category }) {
     const result =
       provider === "igdb"
         ? await detailsIgdb(id)
-        : provider === "tmdb"
-          ? await detailsTmdb(id, category)
-          : provider === "ranobedb"
-            ? await detailsRanobe(id)
-            : await detailsJikan(id, category);
+        : provider === "rawg"
+          ? await detailsRawg(id)
+          : provider === "tmdb"
+            ? await detailsTmdb(id, category)
+            : provider === "omdb"
+              ? await detailsOmdb(id, category)
+              : provider === "ranobedb"
+                ? await detailsRanobe(id)
+                : provider === "tenrai"
+                  ? await detailsTenrai(id, category)
+                  : await detailsJikan(id, category);
     connectionStates.set(provider, "connected");
     return result;
   } catch (error) {
@@ -593,17 +878,33 @@ async function testConnection(provider) {
   if (!status.available) throw new Error(status.reason);
   try {
     if (provider === "igdb") await getIgdbToken();
+    else if (provider === "rawg")
+      await rawgRequest("games", { page_size: "1" });
     else if (provider === "tmdb")
       await fetchJson(
         "https://api.themoviedb.org/3/configuration",
         { headers: tmdbHeaders() },
         "TMDB",
       );
+    else if (provider === "omdb")
+      await omdbRequest({ i: "tt0133093", plot: "short" });
     else if (provider === "ranobedb")
       await fetchJson(
         "https://ranobedb.org/api/v0/series?limit=1",
         undefined,
         "RanobeDB",
+      );
+    else if (provider === "tenrai")
+      await fetchJson(
+        "https://api.tenrai.org/v1/anime?limit=1&sfw=true",
+        {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Everia/0.7 (Windows desktop media library)",
+          },
+        },
+        "Tenrai",
+        { attempts: 2, timeoutMs: 12000 },
       );
     else
       await fetchJson(
@@ -611,7 +912,7 @@ async function testConnection(provider) {
         {
           headers: {
             Accept: "application/json",
-            "User-Agent": "Everia/0.6 (Windows desktop media library)",
+            "User-Agent": "Everia/0.7 (Windows desktop media library)",
           },
         },
         "Jikan",
@@ -623,6 +924,15 @@ async function testConnection(provider) {
     connectionStates.set(provider, "connection-failed");
     throw error;
   }
+}
+async function initializeProviders() {
+  const available = Object.keys(PROVIDERS).filter(
+    (provider) => providerStatus(provider).available,
+  );
+  await Promise.allSettled(
+    available.map((provider) => testConnection(provider)),
+  );
+  return allProviderConfigurations();
 }
 async function downloadImage(rawUrl) {
   const url = new URL(rawUrl);
@@ -647,8 +957,10 @@ module.exports = {
   configureCredentialStore,
   details,
   downloadImage,
+  initializeProviders,
   providerStatus,
   resetProviderSession,
   search,
+  searchChain,
   testConnection,
 };

@@ -11,7 +11,8 @@ export type Category = (typeof categories)[number];
 export type ReadingStatus =
   "Planning" | "In progress" | "Completed" | "On hold" | "Dropped";
 
-export type ProviderId = "igdb" | "tmdb" | "ranobedb" | "jikan";
+export type ProviderId =
+  "igdb" | "rawg" | "tmdb" | "omdb" | "ranobedb" | "tenrai" | "jikan";
 export interface ProviderReference {
   provider: ProviderId;
   providerId: string;

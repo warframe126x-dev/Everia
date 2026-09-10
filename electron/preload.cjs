@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("everiaProviders", {
   status: (provider) => ipcRenderer.invoke("providers:status", provider),
   search: (input) => ipcRenderer.invoke("providers:search", input),
+  searchChain: (input) => ipcRenderer.invoke("providers:search-chain", input),
   details: (input) => ipcRenderer.invoke("providers:details", input),
   downloadImage: (url) => ipcRenderer.invoke("providers:download-image", url),
   configuration: () => ipcRenderer.invoke("providers:configuration"),
@@ -17,6 +18,7 @@ contextBridge.exposeInMainWorld("everiaWindow", {
   onResponsiveScale: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on("window:responsive-scale", listener);
-    return () => ipcRenderer.removeListener("window:responsive-scale", listener);
+    return () =>
+      ipcRenderer.removeListener("window:responsive-scale", listener);
   },
 });

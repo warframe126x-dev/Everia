@@ -47,3 +47,30 @@ test("credential storage fails closed when OS encryption is unavailable", () => 
     /Protected credential storage/,
   );
 });
+
+test("RAWG and OMDb API keys use the same protected storage boundary", () => {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "everia-provider-keys-"),
+  );
+  const filePath = path.join(directory, "credentials.json");
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(`protected:${value}`),
+    decryptString: (value) => value.toString().replace(/^protected:/, ""),
+  };
+  const store = createCredentialStore({
+    safeStorage,
+    filePath,
+    platform: "win32",
+  });
+  store.save("rawg", { token: "rawg-secret" });
+  store.save("omdb", { token: "omdb-secret" });
+  const disk = fs.readFileSync(filePath, "utf8");
+  assert.doesNotMatch(disk, /rawg-secret|omdb-secret/);
+  assert.deepEqual(store.get("rawg"), { token: "rawg-secret" });
+  assert.deepEqual(store.get("omdb"), { token: "omdb-secret" });
+  assert.deepEqual(store.status("rawg"), {
+    configured: true,
+    clientIdHint: undefined,
+  });
+});

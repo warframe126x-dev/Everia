@@ -6,6 +6,7 @@ import type {
   ProviderAvailability,
   ProviderConfiguration,
   ProviderResponse,
+  ProviderSearchResult,
 } from "./providers/types";
 
 declare global {
@@ -24,6 +25,10 @@ declare global {
         query: string;
         category: Category;
       }): Promise<ProviderResponse<ImportCandidate[]>>;
+      searchChain(input: {
+        query: string;
+        category: Category;
+      }): Promise<ProviderResponse<ProviderSearchResult>>;
       details(input: {
         provider: ProviderId;
         providerId: string;
@@ -34,7 +39,7 @@ declare global {
       ): Promise<ProviderResponse<{ bytes: Uint8Array; type: string }>>;
       configuration(): Promise<ProviderResponse<ProviderConfiguration[]>>;
       saveCredentials(input: {
-        provider: "igdb" | "tmdb";
+        provider: "igdb" | "rawg" | "tmdb" | "omdb";
         credentials: {
           clientId?: string;
           clientSecret?: string;
@@ -45,7 +50,7 @@ declare global {
         provider: ProviderId,
       ): Promise<ProviderResponse<ProviderConfiguration>>;
       removeCredentials(
-        provider: "igdb" | "tmdb",
+        provider: "igdb" | "rawg" | "tmdb" | "omdb",
       ): Promise<ProviderResponse<ProviderConfiguration>>;
     };
   }

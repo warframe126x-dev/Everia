@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { ProviderConfiguration } from "./providers/types";
 import type { ProviderId } from "./types";
 
 const categoryCopy: Record<ProviderId, string> = {
   igdb: "Games",
+  rawg: "Games",
   tmdb: "Movies & TV Shows",
+  omdb: "Movies & TV Shows",
   ranobedb: "Light Novels",
+  tenrai: "Anime & Manga",
   jikan: "Anime & Manga",
 };
 
@@ -16,6 +19,8 @@ export function OnlineSourcesSettings() {
   const igdbClientId = useRef<HTMLInputElement>(null);
   const igdbSecret = useRef<HTMLInputElement>(null);
   const tmdbToken = useRef<HTMLInputElement>(null);
+  const rawgKey = useRef<HTMLInputElement>(null);
+  const omdbKey = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
     if (!window.everiaProviders?.configuration) {
@@ -41,9 +46,11 @@ export function OnlineSourcesSettings() {
     setBusy(provider);
     setMessage("");
     const response = await action();
+    const providerName =
+      providers.find((item) => item.id === provider)?.name ?? provider;
     setMessage(
       response.ok
-        ? `${provider.toUpperCase()} is connected.`
+        ? `${providerName} is connected.`
         : (response.error ?? "Connection failed."),
     );
     await refresh();
@@ -73,13 +80,28 @@ export function OnlineSourcesSettings() {
       return response;
     });
 
+  const saveKey = (
+    provider: "rawg" | "omdb",
+    input: RefObject<HTMLInputElement | null>,
+  ) =>
+    perform(provider, async () => {
+      const response = await window.everiaProviders!.saveCredentials({
+        provider,
+        credentials: { token: input.current?.value },
+      });
+      if (input.current) input.current.value = "";
+      return response;
+    });
+
   const stateLabel = (provider: ProviderConfiguration) =>
     provider.state === "connected"
       ? "Connected"
       : provider.state === "connection-failed"
         ? "Connection failed"
         : provider.state === "unchecked"
-          ? "Not checked"
+          ? provider.requiresCredentials
+            ? "Not checked"
+            : "Available"
           : "Not configured";
 
   return (
@@ -88,7 +110,12 @@ export function OnlineSourcesSettings() {
         <article className="provider-setting" key={provider.id}>
           <div className="provider-setting-heading">
             <div>
-              <h3>{provider.name}</h3>
+              <div className="provider-name-row">
+                <h3>{provider.name}</h3>
+                <span className={`provider-role ${provider.role}`}>
+                  {provider.role}
+                </span>
+              </div>
               <p>{categoryCopy[provider.id]}</p>
             </div>
             <span className={`connection-state ${provider.state}`}>
@@ -139,6 +166,23 @@ export function OnlineSourcesSettings() {
               </label>
             </div>
           )}
+          {(provider.id === "rawg" || provider.id === "omdb") && (
+            <div className="provider-fields one-field">
+              <label>
+                API Key
+                <input
+                  ref={provider.id === "rawg" ? rawgKey : omdbKey}
+                  type="password"
+                  placeholder={
+                    provider.configured
+                      ? "Saved securely"
+                      : `${provider.name} API Key`
+                  }
+                  autoComplete="new-password"
+                />
+              </label>
+            </div>
+          )}
           {!provider.requiresCredentials && (
             <p className="no-configuration">No configuration required</p>
           )}
@@ -162,6 +206,24 @@ export function OnlineSourcesSettings() {
                 Save / Connect
               </button>
             )}
+            {provider.id === "rawg" && (
+              <button
+                className="primary"
+                disabled={busy === provider.id}
+                onClick={() => void saveKey("rawg", rawgKey)}
+              >
+                Save / Connect
+              </button>
+            )}
+            {provider.id === "omdb" && (
+              <button
+                className="primary"
+                disabled={busy === provider.id}
+                onClick={() => void saveKey("omdb", omdbKey)}
+              >
+                Save / Connect
+              </button>
+            )}
             <button
               className="secondary"
               disabled={busy === provider.id}
@@ -180,7 +242,7 @@ export function OnlineSourcesSettings() {
                 onClick={() =>
                   void perform(provider.id, () =>
                     window.everiaProviders!.removeCredentials(
-                      provider.id as "igdb" | "tmdb",
+                      provider.id as "igdb" | "rawg" | "tmdb" | "omdb",
                     ),
                   )
                 }

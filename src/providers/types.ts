@@ -11,6 +11,7 @@ export interface ProviderAvailability {
   categories: Category[];
   available: boolean;
   reason?: string;
+  role?: "primary" | "backup";
 }
 
 export interface ImportCandidate {
@@ -45,12 +46,22 @@ export interface ProviderConfiguration {
   state: ProviderConnectionState;
   reason?: string;
   clientIdHint?: string;
+  role: "primary" | "backup";
 }
 
 export interface ProviderResponse<T> {
   ok: boolean;
   data?: T;
   error?: string;
+  errorCode?: string;
+}
+
+export interface ProviderSearchResult {
+  results: ImportCandidate[];
+  provider: ProviderId;
+  providerName: string;
+  fallbackFrom?: string;
+  notice?: string;
 }
 
 export interface MediaProvider {

@@ -6,8 +6,8 @@ test("provider mapping remains category-specific and replaceable", () => {
   expect(providerForCategory("movies")?.id).toBe("tmdb");
   expect(providerForCategory("tv-series")?.id).toBe("tmdb");
   expect(providerForCategory("novels")?.id).toBe("ranobedb");
-  expect(providerForCategory("anime")?.id).toBe("jikan");
-  expect(providerForCategory("manga")?.id).toBe("jikan");
+  expect(providerForCategory("anime")?.id).toBe("tenrai");
+  expect(providerForCategory("manga")?.id).toBe("tenrai");
 });
 
 test("an import becomes an Everia-owned draft with separate provider linkage", () => {

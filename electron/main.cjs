@@ -1,4 +1,11 @@
-const { app, BrowserWindow, ipcMain, safeStorage, screen, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  safeStorage,
+  screen,
+  shell,
+} = require("electron");
 const path = require("node:path");
 const providers = require("./providers.cjs");
 const { createCredentialStore } = require("./credential-store.cjs");
@@ -113,6 +120,7 @@ function safeProviderHandler(action) {
     } catch (error) {
       return {
         ok: false,
+        errorCode: error?.code,
         error:
           error instanceof Error
             ? error.message
@@ -127,6 +135,10 @@ ipcMain.handle(
   safeProviderHandler((provider) => providers.providerStatus(provider)),
 );
 ipcMain.handle("providers:search", safeProviderHandler(providers.search));
+ipcMain.handle(
+  "providers:search-chain",
+  safeProviderHandler(providers.searchChain),
+);
 ipcMain.handle("providers:details", safeProviderHandler(providers.details));
 ipcMain.handle(
   "providers:download-image",
@@ -139,7 +151,7 @@ ipcMain.handle(
 ipcMain.handle(
   "providers:save-credentials",
   safeProviderHandler(async (input) => {
-    if (!input || !["igdb", "tmdb"].includes(input.provider))
+    if (!input || !["igdb", "rawg", "tmdb", "omdb"].includes(input.provider))
       throw new Error("Invalid credential request.");
     credentialStore.save(input.provider, input.credentials);
     providers.resetProviderSession(input.provider);
@@ -153,7 +165,7 @@ ipcMain.handle(
 ipcMain.handle(
   "providers:remove-credentials",
   safeProviderHandler((provider) => {
-    if (!["igdb", "tmdb"].includes(provider))
+    if (!["igdb", "rawg", "tmdb", "omdb"].includes(provider))
       throw new Error("Invalid credential request.");
     credentialStore.remove(provider);
     providers.resetProviderSession(provider);
@@ -174,6 +186,7 @@ app.whenReady().then(() => {
   });
   providers.configureCredentialStore(credentialStore);
   createWindow();
+  void providers.initializeProviders();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

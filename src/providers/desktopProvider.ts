@@ -7,15 +7,21 @@ import type {
 
 const providerNames: Record<ProviderId, string> = {
   igdb: "IGDB",
+  rawg: "RAWG",
   tmdb: "TMDB",
+  omdb: "OMDb",
   ranobedb: "RanobeDB",
+  tenrai: "Tenrai",
   jikan: "Jikan",
 };
 
 const providerCategories: Record<ProviderId, Category[]> = {
   igdb: ["games"],
+  rawg: ["games"],
   tmdb: ["movies", "tv-series"],
+  omdb: ["movies", "tv-series"],
   ranobedb: ["novels"],
+  tenrai: ["anime", "manga"],
   jikan: ["anime", "manga"],
 };
 

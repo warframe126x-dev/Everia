@@ -216,7 +216,8 @@ export function SettingsView({
             <h3>Metadata credits</h3>
             <p>
               Provider attribution is kept here, separate from your personal
-              library. Everia supports IGDB, TMDB, RanobeDB and Jikan adapters.
+              library. Everia supports IGDB, RAWG, TMDB, OMDb, RanobeDB, Tenrai
+              and Jikan adapters.
             </p>
             <img
               className="tmdb-logo"
@@ -226,6 +227,23 @@ export function SettingsView({
             <p className="tmdb-notice">
               This product uses the TMDB API but is not endorsed or certified by
               TMDB.
+            </p>
+            <p>
+              RAWG metadata is provided by{" "}
+              <a href="https://rawg.io/" target="_blank" rel="noreferrer">
+                RAWG
+              </a>
+              . OMDb data is licensed under{" "}
+              <a
+                href="https://creativecommons.org/licenses/by-nc/4.0/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                CC BY-NC 4.0
+              </a>
+              . Anime and manga metadata may include third-party content
+              surfaced through Tenrai or Jikan and remains subject to its
+              respective owners' rights.
             </p>
           </div>
         </div>

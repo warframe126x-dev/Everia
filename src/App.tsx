@@ -121,6 +121,10 @@ function App() {
       document.documentElement.dataset.responsiveSize =
         bounded > 0.05 ? "expanded" : "baseline";
       document.documentElement.style.setProperty(
+        "--responsive-progress",
+        String(bounded),
+      );
+      document.documentElement.style.setProperty(
         "--home-brand-factor",
         String(1 + bounded * 0.125),
       );
