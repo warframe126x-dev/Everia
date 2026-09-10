@@ -25,27 +25,37 @@ body {
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 72%, #158c99) #071017;
+  scrollbar-color: color-mix(in srgb, var(--accent) 38%, #17444d)
+    rgba(5, 13, 18, 0.72);
 }
 *::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 *::-webkit-scrollbar-track {
-  background: #071017;
+  background: rgba(5, 13, 18, 0.72);
 }
 *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
   border-radius: 999px;
-  background: linear-gradient(180deg, #197f91, var(--accent));
+  background:
+    linear-gradient(
+        180deg,
+        color-mix(in srgb, #168397 62%, #132c33),
+        color-mix(in srgb, var(--accent) 42%, #17462f)
+      )
+      padding-box;
 }
 *::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(
-    180deg,
-    #22a1b5,
-    color-mix(in srgb, var(--accent) 80%, white)
-  );
-  box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 36%, transparent);
+  background:
+    linear-gradient(
+        180deg,
+        color-mix(in srgb, #1c98ab 72%, #17363d),
+        color-mix(in srgb, var(--accent) 56%, #1b5438)
+      )
+      padding-box;
+  box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 button,
 input,
