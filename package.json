@@ -1,0 +1,37 @@
+{
+  "name": "everia",
+  "version": "0.6.0",
+  "description": "Your Personal Universe — a private, local media catalogue.",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "node --experimental-specifier-resolution=node --test src/validation.test.ts electron/providers.test.cjs electron/credential-store.test.cjs electron/window-state.test.cjs",
+    "test:ui": "vitest run",
+    "format:check": "prettier --check src",
+    "desktop": "npm run build && electron .",
+    "package:win": "npm run build && electron-packager . Everia --platform=win32 --arch=x64 --app-version=0.6.0 --icon=public/assets/branding/everia-windows-icon.ico --out=release --overwrite --asar --prune=true --ignore='^/(src|upload|release|node_modules/.cache)(/|$)' --ignore='\\.(zip|tsbuildinfo)$' --ignore='^/.*\\.(spec\\.tsx|test\\.ts|providers\\.test\\.cjs|credential-store\\.test\\.cjs|window-state\\.test\\.cjs)$'"
+  },
+  "dependencies": {
+    "lucide-react": "1.43.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "44.3.0",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.0.1",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  }
+}

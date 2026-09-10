@@ -1,0 +1,22 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("everiaProviders", {
+  status: (provider) => ipcRenderer.invoke("providers:status", provider),
+  search: (input) => ipcRenderer.invoke("providers:search", input),
+  details: (input) => ipcRenderer.invoke("providers:details", input),
+  downloadImage: (url) => ipcRenderer.invoke("providers:download-image", url),
+  configuration: () => ipcRenderer.invoke("providers:configuration"),
+  saveCredentials: (input) =>
+    ipcRenderer.invoke("providers:save-credentials", input),
+  testConnection: (provider) => ipcRenderer.invoke("providers:test", provider),
+  removeCredentials: (provider) =>
+    ipcRenderer.invoke("providers:remove-credentials", provider),
+});
+
+contextBridge.exposeInMainWorld("everiaWindow", {
+  onResponsiveScale: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("window:responsive-scale", listener);
+    return () => ipcRenderer.removeListener("window:responsive-scale", listener);
+  },
+});

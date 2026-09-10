@@ -1,0 +1,263 @@
+const { afterEach, test } = require("node:test");
+const assert = require("node:assert/strict");
+const providers = require("./providers.cjs");
+
+const originalFetch = global.fetch;
+const originalEnv = {
+  clientId: process.env.EVERIA_IGDB_CLIENT_ID,
+  clientSecret: process.env.EVERIA_IGDB_CLIENT_SECRET,
+  accessToken: process.env.EVERIA_IGDB_ACCESS_TOKEN,
+  tmdbToken: process.env.EVERIA_TMDB_TOKEN,
+};
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  for (const provider of ["igdb", "tmdb", "ranobedb", "jikan"])
+    providers.resetProviderSession(provider);
+  const restore = (key, value) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+  restore("EVERIA_IGDB_CLIENT_ID", originalEnv.clientId);
+  restore("EVERIA_IGDB_CLIENT_SECRET", originalEnv.clientSecret);
+  restore("EVERIA_IGDB_ACCESS_TOKEN", originalEnv.accessToken);
+  restore("EVERIA_TMDB_TOKEN", originalEnv.tmdbToken);
+});
+
+test("credentialed providers fail closed without affecting RanobeDB", () => {
+  delete process.env.EVERIA_IGDB_CLIENT_ID;
+  delete process.env.EVERIA_IGDB_CLIENT_SECRET;
+  delete process.env.EVERIA_IGDB_ACCESS_TOKEN;
+  delete process.env.EVERIA_TMDB_TOKEN;
+  assert.equal(providers.providerStatus("igdb").available, false);
+  assert.equal(providers.providerStatus("tmdb").available, false);
+  assert.equal(providers.providerStatus("ranobedb").available, true);
+  assert.equal(providers.providerStatus("ranobedb").state, "unchecked");
+  assert.equal(providers.providerStatus("jikan").state, "unchecked");
+});
+
+test("provider network failure returns a clean offline-safe error", async () => {
+  global.fetch = async () => {
+    throw new Error("socket details that must not escape");
+  };
+  await assert.rejects(
+    providers.search({
+      provider: "ranobedb",
+      query: "slime",
+      category: "novels",
+    }),
+    /library is unaffected/,
+  );
+});
+
+test("image cache bridge only accepts approved provider hosts", async () => {
+  await assert.rejects(
+    providers.downloadImage("https://example.com/poster.jpg"),
+    /cannot be cached/,
+  );
+});
+
+test("TMDB responses are normalized without exposing provider shapes", async () => {
+  process.env.EVERIA_TMDB_TOKEN = "test-token";
+  global.fetch = async (url, init) => {
+    assert.match(String(url), /search\/movie/);
+    assert.equal(init.headers.Authorization, "Bearer test-token");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        results: [
+          {
+            id: 42,
+            title: "The Answer",
+            original_title: "Original Answer",
+            release_date: "2026-01-02",
+            poster_path: "/answer.jpg",
+            overview: "A local-first test.",
+          },
+        ],
+      }),
+    };
+  };
+  const [result] = await providers.search({
+    provider: "tmdb",
+    query: "answer",
+    category: "movies",
+  });
+  assert.deepEqual(
+    {
+      provider: result.provider,
+      id: result.providerId,
+      category: result.category,
+      title: result.title,
+    },
+    {
+      provider: "tmdb",
+      id: "42",
+      category: "movies",
+      title: "The Answer",
+    },
+  );
+});
+
+test("RanobeDB search normalizes series-level light novel records", async () => {
+  global.fetch = async (url) => {
+    assert.match(String(url), /\/api\/v0\/series\?/);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        series: [
+          {
+            id: 7,
+            title: "A Light Novel",
+            title_orig: "ライトノベル",
+          },
+        ],
+      }),
+    };
+  };
+  const [result] = await providers.search({
+    provider: "ranobedb",
+    query: "light novel",
+    category: "novels",
+  });
+  assert.equal(result.providerId, "7");
+  assert.equal(result.subtype, "Light Novel");
+  assert.equal(result.cacheCover, false);
+});
+
+test("RanobeDB details populate the review model instead of a blank form", async () => {
+  global.fetch = async (url) => {
+    assert.match(String(url), /\/api\/v0\/series\/3580/);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        series: {
+          id: 3580,
+          title: "That Time I Got Reincarnated as a Slime",
+          title_orig: "転生したらスライムだった件",
+          start_date: 1398902400,
+          publication_status: "completed",
+          description: "A complete series description.",
+          staff: [
+            { role_type: "author", name: "Fuse" },
+            { role_type: "artist", name: "Mitz Vah" },
+          ],
+          tags: [{ ttype: "genre", name: "Fantasy" }],
+          books: [
+            { book_type: "main", image: { filename: "slime.jpg" } },
+            { book_type: "main", image: null },
+          ],
+          publishers: [{ name: "GC Novels" }],
+        },
+      }),
+    };
+  };
+  const result = await providers.details({
+    provider: "ranobedb",
+    providerId: "3580",
+    category: "novels",
+  });
+  assert.equal(result.creator, "Fuse");
+  assert.equal(result.coverUrl, "https://images.ranobedb.org/slime.jpg");
+  assert.equal(result.metadata.volumes, 2);
+  assert.equal(result.metadata.providerStatus, "completed");
+});
+
+test("Jikan anime and manga normalize category-specific details", async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(init.headers.Accept, "application/json");
+    assert.match(init.headers["User-Agent"], /^Everia\/0\.6/);
+    return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: String(url).includes("/anime/")
+        ? {
+            mal_id: 1,
+            title: "Anime",
+            title_japanese: "アニメ",
+            studios: [{ name: "Studio Test" }],
+            genres: [{ name: "Fantasy" }],
+            episodes: 24,
+            status: "Finished Airing",
+            aired: { from: "2024-01-01T00:00:00+00:00" },
+            images: {
+              jpg: { large_image_url: "https://cdn.myanimelist.net/anime.jpg" },
+            },
+          }
+        : {
+            mal_id: 2,
+            title: "Manga",
+            type: "Manhwa",
+            authors: [{ name: "Author Test" }],
+            genres: [{ name: "Drama" }],
+            volumes: null,
+            chapters: 80,
+            published: { from: "2022-02-03T00:00:00+00:00" },
+          },
+    }),
+    };
+  };
+  const anime = await providers.details({
+    provider: "jikan",
+    providerId: "1",
+    category: "anime",
+  });
+  const manga = await providers.details({
+    provider: "jikan",
+    providerId: "2",
+    category: "manga",
+  });
+  assert.equal(anime.creator, "Studio Test");
+  assert.equal(anime.metadata.episodes, 24);
+  assert.equal(manga.subtype, "Manhwa");
+  assert.equal(manga.metadata.chapters, 80);
+  assert.equal(providers.providerStatus("jikan").state, "connected");
+});
+
+test("Jikan retries transient gateway failures and reports real health", async () => {
+  let attempts = 0;
+  global.fetch = async () => {
+    attempts += 1;
+    if (attempts < 2)
+      return {
+        ok: false,
+        status: 504,
+        headers: { get: () => null },
+      };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    };
+  };
+  const results = await providers.search({
+    provider: "jikan",
+    query: "slime",
+    category: "anime",
+  });
+  assert.deepEqual(results, []);
+  assert.equal(attempts, 2);
+  assert.equal(providers.providerStatus("jikan").state, "connected");
+});
+
+test("Jikan reports an honest isolated failure after retry exhaustion", async () => {
+  global.fetch = async () => ({
+    ok: false,
+    status: 504,
+    headers: { get: () => null },
+  });
+  await assert.rejects(
+    providers.search({
+      provider: "jikan",
+      query: "slime",
+      category: "manga",
+    }),
+    /temporarily unavailable.*library is unaffected/i,
+  );
+  assert.equal(providers.providerStatus("jikan").state, "connection-failed");
+  assert.equal(providers.providerStatus("ranobedb").available, true);
+});
