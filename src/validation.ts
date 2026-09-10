@@ -84,6 +84,8 @@ export function validateItems(value: unknown): MediaItem[] {
     if (item.providerMetadata !== undefined) {
       if (!item.providerMetadata || typeof item.providerMetadata !== "object")
         throw new Error("Invalid provider metadata.");
+      const metadata = { ...item.providerMetadata };
+      item.providerMetadata = metadata;
       const numericKeys = [
         "runtimeMinutes",
         "seasons",
@@ -106,12 +108,26 @@ export function validateItems(value: unknown): MediaItem[] {
         "serialization",
       ];
       for (const key of numericKeys) {
-        const value = item.providerMetadata[key];
-        if (value !== undefined && (!Number.isFinite(value) || value < 0))
+        const value = metadata[key];
+        if (
+          (key === "volumes" || key === "chapters") &&
+          (value === null ||
+            value === undefined ||
+            (typeof value === "string" && !value.trim()))
+        ) {
+          delete metadata[key];
+          continue;
+        }
+        if (
+          key === "volumes" ||
+          key === "chapters"
+            ? !Number.isInteger(value) || value <= 0
+            : value !== undefined && (!Number.isFinite(value) || value < 0)
+        )
           throw new Error(`Invalid provider metadata: ${key}.`);
       }
       for (const key of arrayKeys) {
-        const value = item.providerMetadata[key];
+        const value = metadata[key];
         if (
           value !== undefined &&
           (!Array.isArray(value) ||
@@ -127,7 +143,7 @@ export function validateItems(value: unknown): MediaItem[] {
         "season",
         "sourceInformation",
       ]) {
-        const value = item.providerMetadata[key];
+        const value = metadata[key];
         if (value !== undefined && typeof value !== "string")
           throw new Error(`Invalid provider metadata: ${key}.`);
       }
