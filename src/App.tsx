@@ -116,8 +116,15 @@ function App() {
     document.documentElement.style.setProperty("--text", theme.text);
   }, [theme]);
   useEffect(() => {
-    const updateScale = ({ progress }: { progress: number }) => {
+    const updateScale = ({
+      progress,
+      homeProgress = progress,
+    }: {
+      progress: number;
+      homeProgress?: number;
+    }) => {
       const bounded = Math.max(0, Math.min(1, progress));
+      const boundedHome = Math.max(0, Math.min(1, homeProgress));
       document.documentElement.dataset.responsiveSize =
         bounded > 0.05 ? "expanded" : "baseline";
       document.documentElement.style.setProperty(
@@ -126,11 +133,11 @@ function App() {
       );
       document.documentElement.style.setProperty(
         "--home-brand-factor",
-        String(1 + bounded * 0.125),
+        String(1 + boundedHome * 0.125),
       );
       document.documentElement.style.setProperty(
         "--home-footer-factor",
-        String(1 + bounded * 0.2),
+        String(1 + boundedHome * 0.2),
       );
     };
     updateScale({ progress: 0 });
