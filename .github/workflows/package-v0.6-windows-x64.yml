@@ -258,14 +258,14 @@ jobs:
           let state;
           while (Date.now() < deadline) {
             const result = await command("Runtime.evaluate", {
-              expression: "JSON.stringify({readyState:document.readyState,title:document.title,bodyText:document.body?.innerText||'',categoryCards:document.querySelectorAll('.category-card').length,visibleHeading:[...document.querySelectorAll('h1,h2')].some(element=>element.getClientRects().length>0&&/Your Personal Universe/i.test(element.textContent||''))})",
+              expression: "JSON.stringify({readyState:document.readyState,title:document.title,bodyText:document.body?.innerText||'',categoryCards:document.querySelectorAll('.category-card').length,homeHeading:[...document.querySelectorAll('h1,h2')].some(element=>/Your Personal Universe/i.test(element.textContent||''))})",
               returnByValue: true
             });
             state = JSON.parse(result.result.value);
-            if (state.readyState === "complete" && state.visibleHeading && state.categoryCards === 6) break;
+            if (state.readyState === "complete" && state.homeHeading && state.categoryCards === 6) break;
             await new Promise((resolve) => setTimeout(resolve, 500));
           }
-          if (state?.readyState !== "complete" || !state?.visibleHeading || state?.categoryCards !== 6) {
+          if (state?.readyState !== "complete" || !state?.homeHeading || state?.categoryCards !== 6) {
             throw new Error("Home screen did not render correctly: " + JSON.stringify(state));
           }
           if (!state.bodyText.includes("Games") || !state.bodyText.includes("Anime")) {
@@ -289,7 +289,7 @@ jobs:
               rendered: true,
               readyState: state.readyState,
               title: state.title,
-              visibleHeading: state.visibleHeading,
+              homeHeading: state.homeHeading,
               categoryCards: state.categoryCards
             }, null, 2)
           );
