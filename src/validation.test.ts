@@ -55,3 +55,61 @@ test("accepts v0.7 provider references without changing local fields", () => {
     assert.equal(item.providerReference?.provider, provider);
   }
 });
+
+test("accepts Manga with both volumes and chapters", () => {
+  const item = validateItems([
+    {
+      ...base,
+      category: "manga",
+      providerMetadata: { volumes: 12, chapters: 64 },
+    },
+  ])[0];
+  assert.deepEqual(item.providerMetadata, { volumes: 12, chapters: 64 });
+});
+test("accepts Manga with volumes and no chapters", () => {
+  const item = validateItems([
+    {
+      ...base,
+      category: "manga",
+      providerMetadata: { volumes: 8, chapters: null },
+    },
+  ])[0];
+  assert.equal(item.providerMetadata?.volumes, 8);
+  assert.equal(item.providerMetadata?.chapters, undefined);
+});
+test("accepts Manga with unknown volume and chapter counts", () => {
+  for (const providerMetadata of [
+    {},
+    { volumes: null, chapters: undefined },
+    { volumes: "", chapters: "   " },
+  ]) {
+    const item = validateItems([
+      { ...base, category: "manga", providerMetadata },
+    ])[0];
+    assert.equal(item.providerMetadata?.volumes, undefined);
+    assert.equal(item.providerMetadata?.chapters, undefined);
+  }
+});
+test("rejects malformed Manga volume and chapter counts", () => {
+  for (const providerMetadata of [
+    { volumes: "many" },
+    { chapters: -1 },
+    { volumes: 0 },
+    { chapters: 1.5 },
+  ])
+    assert.throws(
+      () =>
+        validateItems([{ ...base, category: "manga", providerMetadata }]),
+      /Invalid provider metadata/,
+    );
+});
+test("Manga count handling does not change valid Anime metadata", () => {
+  const item = validateItems([
+    {
+      ...base,
+      category: "anime",
+      providerMetadata: { episodes: 24, seasonYear: 2024 },
+    },
+  ])[0];
+  assert.deepEqual(item.providerMetadata, { episodes: 24, seasonYear: 2024 });
+});
