@@ -87,6 +87,44 @@ function responsiveZoom(contentBounds, display) {
   return Math.round(clamp(zoom, 1, MAX_ZOOM) * 1000) / 1000;
 }
 
+function responsiveProgress(contentBounds, display) {
+  const scaleFactor = Number(display?.scaleFactor) || 1;
+  const physicalWidth = contentBounds.width * scaleFactor;
+  const physicalHeight = contentBounds.height * scaleFactor;
+  const widthProgress =
+    (physicalWidth - DEFAULT_WIDTH) /
+    (BASELINE_PHYSICAL_WIDTH - DEFAULT_WIDTH);
+  const heightProgress =
+    (physicalHeight - DEFAULT_HEIGHT) /
+    (BASELINE_PHYSICAL_HEIGHT - DEFAULT_HEIGHT);
+  const viewportProgress = clamp(
+    Math.min(widthProgress, heightProgress),
+    0,
+    1,
+  );
+  const smoothProgress =
+    viewportProgress * viewportProgress * (3 - 2 * viewportProgress);
+
+  const workArea = display?.workArea;
+  const fillRatio =
+    workArea?.width > 0 && workArea?.height > 0
+      ? Math.min(
+          contentBounds.width / workArea.width,
+          contentBounds.height / workArea.height,
+        )
+      : 1;
+  const maximizedWeight = clamp((fillRatio - 0.8) / 0.18, 0, 1);
+  const zoomProgress = clamp(
+    (responsiveZoom(contentBounds, display) - 1) / (MAX_ZOOM - 1),
+    0,
+    1,
+  );
+  return (
+    Math.round(Math.max(zoomProgress, smoothProgress * maximizedWeight) * 1000) /
+    1000
+  );
+}
+
 function loadWindowState(filePath) {
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -116,6 +154,7 @@ module.exports = {
   intersectsWorkArea,
   loadWindowState,
   resolveWindowState,
+  responsiveProgress,
   responsiveZoom,
   saveWindowState,
 };
