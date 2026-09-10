@@ -1,6 +1,6 @@
 {
   "name": "everia",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Your Personal Universe — a private, local media catalogue.",
   "main": "electron/main.cjs",
   "type": "module",
@@ -12,7 +12,7 @@
     "test:ui": "vitest run",
     "format:check": "prettier --check src",
     "desktop": "npm run build && electron .",
-    "package:win": "npm run build && electron-packager . Everia --platform=win32 --arch=x64 --app-version=0.7.0 --icon=public/assets/branding/everia-windows-icon.ico --out=release --overwrite --asar --prune=true --ignore='^/(src|upload|release|node_modules/.cache)(/|$)' --ignore='\\.(zip|tsbuildinfo)$' --ignore='^/.*\\.(spec\\.tsx|test\\.ts|providers\\.test\\.cjs|credential-store\\.test\\.cjs|window-state\\.test\\.cjs)$'"
+    "package:win": "npm run build && electron-packager . Everia --platform=win32 --arch=x64 --app-version=0.8.0 --icon=public/assets/branding/everia-windows-icon.ico --out=release --overwrite --asar --prune=true --ignore='^/(src|upload|release|node_modules/.cache)(/|$)' --ignore='\\.(zip|tsbuildinfo)$' --ignore='^/.*\\.(spec\\.tsx|test\\.ts|providers\\.test\\.cjs|credential-store\\.test\\.cjs|window-state\\.test\\.cjs)$'"
   },
   "dependencies": {
     "lucide-react": "1.43.0",
