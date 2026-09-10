@@ -16,9 +16,18 @@ contextBridge.exposeInMainWorld("everiaProviders", {
 
 contextBridge.exposeInMainWorld("everiaWindow", {
   onResponsiveScale: (callback) => {
+    let active = true;
     const listener = (_event, value) => callback(value);
     ipcRenderer.on("window:responsive-scale", listener);
-    return () =>
+    void ipcRenderer
+      .invoke("window:responsive-scale-current")
+      .then((value) => {
+        if (active) callback(value);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
       ipcRenderer.removeListener("window:responsive-scale", listener);
+    };
   },
 });
