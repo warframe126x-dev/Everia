@@ -22,6 +22,17 @@ app.setAppUserModelId("com.everia.app");
 
 let windowStatePath;
 
+function responsiveStateForWindow(window) {
+  const display = screen.getDisplayMatching(window.getBounds());
+  const contentBounds = window.getContentBounds();
+  const zoom = responsiveZoom(contentBounds, display);
+  return {
+    zoom,
+    progress: responsiveProgress(contentBounds, display),
+    homeProgress: Math.max(0, Math.min(1, (zoom - 1) / (1 / 3))),
+  };
+}
+
 function createWindow() {
   const restored = resolveWindowState(
     loadWindowState(windowStatePath),
@@ -71,23 +82,13 @@ function createWindow() {
   };
   const applyResponsiveScale = () => {
     if (window.isDestroyed()) return;
-    const display = screen.getDisplayMatching(window.getBounds());
-    const zoom = responsiveZoom(window.getContentBounds(), display);
-    if (zoom !== lastZoom) {
-      lastZoom = zoom;
-      window.webContents.setZoomFactor(zoom);
+    const responsiveState = responsiveStateForWindow(window);
+    if (responsiveState.zoom !== lastZoom) {
+      lastZoom = responsiveState.zoom;
+      window.webContents.setZoomFactor(responsiveState.zoom);
     }
-    const homeProgress = Math.max(
-      0,
-      Math.min(1, (zoom - 1) / (1 / 3)),
-    );
-    const progress = responsiveProgress(window.getContentBounds(), display);
     if (rendererReady)
-      window.webContents.send("window:responsive-scale", {
-        zoom,
-        progress,
-        homeProgress,
-      });
+      window.webContents.send("window:responsive-scale", responsiveState);
   };
 
   for (const event of ["resize", "move", "maximize", "unmaximize"]) {
@@ -138,6 +139,13 @@ function safeProviderHandler(action) {
     }
   };
 }
+
+ipcMain.handle("window:responsive-scale-current", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || window.isDestroyed())
+    return { zoom: 1, progress: 0, homeProgress: 0 };
+  return responsiveStateForWindow(window);
+});
 
 ipcMain.handle(
   "providers:status",
