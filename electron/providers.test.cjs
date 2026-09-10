@@ -185,7 +185,7 @@ test("RanobeDB details populate the review model instead of a blank form", async
 test("Jikan anime and manga normalize category-specific details", async () => {
   global.fetch = async (url, init) => {
     assert.equal(init.headers.Accept, "application/json");
-    assert.match(init.headers["User-Agent"], /^Everia\/0\.7/);
+    assert.match(init.headers["User-Agent"], /^Everia\/0\.8/);
     return {
       ok: true,
       status: 200,
@@ -307,7 +307,7 @@ test("OMDb search normalizes movie and television records", async () => {
 test("Tenrai normalizes its documented Jikan-compatible response", async () => {
   global.fetch = async (url, init) => {
     assert.match(String(url), /^https:\/\/api\.tenrai\.org\/v1\/manga\?/);
-    assert.match(init.headers["User-Agent"], /^Everia\/0\.7/);
+    assert.match(init.headers["User-Agent"], /^Everia\/0\.8/);
     return {
       ok: true,
       status: 200,
@@ -338,6 +338,61 @@ test("Tenrai normalizes its documented Jikan-compatible response", async () => {
   assert.equal(result.providerName, "Tenrai");
   assert.equal(result.subtype, "Manhua");
   assert.equal(result.metadata.chapters, 12);
+});
+
+test("Tenrai safely normalizes optional Manga volume and chapter counts", async () => {
+  const cases = new Map([
+    ["1", { volumes: 9, chapters: 47 }],
+    ["2", { volumes: 6, chapters: null }],
+    ["3", { volumes: null }],
+    ["4", { volumes: "unknown", chapters: -3 }],
+  ]);
+  global.fetch = async (url) => {
+    const id = String(url).match(/\/manga\/(\d+)\/full/)?.[1];
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: {
+          mal_id: Number(id),
+          title: `Manga ${id}`,
+          type: "Manga",
+          ...cases.get(id),
+        },
+      }),
+    };
+  };
+
+  const details = [];
+  for (const providerId of cases.keys())
+    details.push(
+      await providers.details({
+        provider: "tenrai",
+        providerId,
+        category: "manga",
+      }),
+    );
+
+  assert.deepEqual(details[0].metadata, {
+    authors: [],
+    studios: undefined,
+    serialization: [],
+    originalTitle: undefined,
+    alternateTitles: [],
+    providerStatus: undefined,
+    episodes: undefined,
+    volumes: 9,
+    chapters: 47,
+    format: "Manga",
+    season: undefined,
+    seasonYear: undefined,
+  });
+  assert.equal(details[1].metadata.volumes, 6);
+  assert.equal(details[1].metadata.chapters, undefined);
+  assert.equal(details[2].metadata.volumes, undefined);
+  assert.equal(details[2].metadata.chapters, undefined);
+  assert.equal(details[3].metadata.volumes, undefined);
+  assert.equal(details[3].metadata.chapters, undefined);
 });
 
 test("a valid empty primary response does not query the backup", async () => {
