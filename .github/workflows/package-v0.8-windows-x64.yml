@@ -297,7 +297,6 @@ jobs:
             JSON.stringify({ sourceCommit: process.env.SOURCE_SHA, launchedExecutable: "Everia.exe", rendered: true, ...state }, null, 2)
           );
           socket.close();
-          browserSocket.close();
           '@ | Set-Content $scriptPath -Encoding utf8
           node $scriptPath
 
@@ -551,6 +550,7 @@ jobs:
             }, null, 2)
           );
           socket.close();
+          browserSocket.close();
           '@ | Set-Content $scriptPath -Encoding utf8
           node $scriptPath
 
