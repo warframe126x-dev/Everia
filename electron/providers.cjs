@@ -664,6 +664,17 @@ function jikanTitles(item) {
     item.title_japanese,
   ]).filter((x) => x !== item.title);
 }
+function optionalPositiveInteger(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && !value.trim())
+  )
+    return undefined;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
 function normalizeMalCompatible(item, category, provider = "jikan") {
   const anime = category === "anime";
   const people = names(item.authors);
@@ -706,8 +717,8 @@ function normalizeMalCompatible(item, category, provider = "jikan") {
       alternateTitles,
       providerStatus: item.status,
       episodes: anime ? item.episodes : undefined,
-      volumes: anime ? undefined : item.volumes,
-      chapters: anime ? undefined : item.chapters,
+      volumes: anime ? undefined : optionalPositiveInteger(item.volumes),
+      chapters: anime ? undefined : optionalPositiveInteger(item.chapters),
       format: item.type,
       season: anime ? item.season : undefined,
       seasonYear: anime ? item.year : undefined,
@@ -722,7 +733,7 @@ async function searchTenrai(query, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.7 (Windows desktop media library)",
+        "User-Agent": "Everia/0.8 (Windows desktop media library)",
       },
     },
     "Tenrai",
@@ -740,7 +751,7 @@ async function detailsTenrai(id, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.7 (Windows desktop media library)",
+        "User-Agent": "Everia/0.8 (Windows desktop media library)",
       },
     },
     "Tenrai",
@@ -757,7 +768,7 @@ async function searchJikan(query, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.7 (Windows desktop media library)",
+        "User-Agent": "Everia/0.8 (Windows desktop media library)",
       },
     },
     "Jikan",
@@ -775,7 +786,7 @@ async function detailsJikan(id, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.7 (Windows desktop media library)",
+        "User-Agent": "Everia/0.8 (Windows desktop media library)",
       },
     },
     "Jikan",
@@ -900,7 +911,7 @@ async function testConnection(provider) {
         {
           headers: {
             Accept: "application/json",
-            "User-Agent": "Everia/0.7 (Windows desktop media library)",
+            "User-Agent": "Everia/0.8 (Windows desktop media library)",
           },
         },
         "Tenrai",
@@ -912,7 +923,7 @@ async function testConnection(provider) {
         {
           headers: {
             Accept: "application/json",
-            "User-Agent": "Everia/0.7 (Windows desktop media library)",
+            "User-Agent": "Everia/0.8 (Windows desktop media library)",
           },
         },
         "Jikan",
