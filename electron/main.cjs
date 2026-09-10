@@ -12,6 +12,7 @@ const { createCredentialStore } = require("./credential-store.cjs");
 const {
   loadWindowState,
   resolveWindowState,
+  responsiveProgress,
   responsiveZoom,
   saveWindowState,
 } = require("./window-state.cjs");
@@ -76,9 +77,17 @@ function createWindow() {
       lastZoom = zoom;
       window.webContents.setZoomFactor(zoom);
     }
-    const progress = Math.max(0, Math.min(1, (zoom - 1) / (1 / 3)));
+    const homeProgress = Math.max(
+      0,
+      Math.min(1, (zoom - 1) / (1 / 3)),
+    );
+    const progress = responsiveProgress(window.getContentBounds(), display);
     if (rendererReady)
-      window.webContents.send("window:responsive-scale", { zoom, progress });
+      window.webContents.send("window:responsive-scale", {
+        zoom,
+        progress,
+        homeProgress,
+      });
   };
 
   for (const event of ["resize", "move", "maximize", "unmaximize"]) {
