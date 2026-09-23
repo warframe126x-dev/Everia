@@ -14,6 +14,7 @@ const originalEnv = {
 
 afterEach(() => {
   global.fetch = originalFetch;
+  providers.configureCredentialStore(undefined);
   for (const provider of [
     "igdb",
     "rawg",
@@ -71,6 +72,32 @@ test("image cache bridge only accepts approved provider hosts", async () => {
     providers.downloadImage("https://example.com/poster.jpg"),
     /cannot be cached/,
   );
+});
+
+test("image caching validates every redirect and bounds redirect chains", async () => {
+  const image = {
+    ok: true,
+    status: 200,
+    headers: { get: (name) => name === "content-type" ? "image/png" : null },
+    arrayBuffer: async () => Uint8Array.of(137, 80, 78, 71).buffer,
+  };
+  const requests = [];
+  global.fetch = async (url, init) => {
+    requests.push(String(url));
+    assert.equal(init.redirect, "manual");
+    return requests.length === 1
+      ? { status: 302, headers: { get: () => "/second.png" } }
+      : image;
+  };
+  assert.equal((await providers.downloadImage("https://image.tmdb.org/first.png")).bytes.length, 4);
+  assert.deepEqual(requests, ["https://image.tmdb.org/first.png", "https://image.tmdb.org/second.png"]);
+  requests.length = 0;
+  global.fetch = async () => ({ status: 302, headers: { get: () => "https://example.com/private" } });
+  await assert.rejects(providers.downloadImage("https://image.tmdb.org/first.png"), /cannot be cached/);
+  global.fetch = async () => ({ status: 302, headers: { get: () => "/loop" } });
+  await assert.rejects(providers.downloadImage("https://image.tmdb.org/loop"), /too many times/);
+  global.fetch = async () => image;
+  assert.equal((await providers.downloadImage("https://image.tmdb.org/direct.png")).type, "image/png");
 });
 
 test("TMDB responses are normalized without exposing provider shapes", async () => {
@@ -143,6 +170,15 @@ test("RanobeDB search normalizes series-level light novel records", async () => 
   assert.equal(result.cacheCover, false);
 });
 
+test("RanobeDB treats zero or unknown volume count as absent metadata", async () => {
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({
+    series: [{ id: 1, title: "Unknown books", c_num_books: 0 }, { id: 2, title: "Known books", c_num_books: 3 }],
+  }) });
+  const results = await providers.search({ provider: "ranobedb", query: "books", category: "novels" });
+  assert.equal(results[0].metadata.volumes, undefined);
+  assert.equal(results[1].metadata.volumes, 3);
+});
+
 test("RanobeDB details populate the review model instead of a blank form", async () => {
   global.fetch = async (url) => {
     assert.match(String(url), /\/api\/v0\/series\/3580/);
@@ -185,7 +221,7 @@ test("RanobeDB details populate the review model instead of a blank form", async
 test("Jikan anime and manga normalize category-specific details", async () => {
   global.fetch = async (url, init) => {
     assert.equal(init.headers.Accept, "application/json");
-    assert.match(init.headers["User-Agent"], /^Everia\/0\.8/);
+    assert.match(init.headers["User-Agent"], /^Everia\/0\.9/);
     return {
       ok: true,
       status: 200,
@@ -307,7 +343,7 @@ test("OMDb search normalizes movie and television records", async () => {
 test("Tenrai normalizes its documented Jikan-compatible response", async () => {
   global.fetch = async (url, init) => {
     assert.match(String(url), /^https:\/\/api\.tenrai\.org\/v1\/manga\?/);
-    assert.match(init.headers["User-Agent"], /^Everia\/0\.8/);
+    assert.match(init.headers["User-Agent"], /^Everia\/0\.9/);
     return {
       ok: true,
       status: 200,
@@ -412,6 +448,40 @@ test("a valid empty primary response does not query the backup", async () => {
   assert.equal(result.provider, "igdb");
   assert.equal(result.notice, undefined);
   assert.equal(calls, 1);
+});
+
+test("malformed successful primary response falls back without confusing a valid empty result", async () => {
+  process.env.EVERIA_TMDB_TOKEN = "primary";
+  process.env.EVERIA_OMDB_API_KEY = "backup";
+  const requests = [];
+  global.fetch = async (url) => {
+    requests.push(String(url));
+    return { ok: true, status: 200, json: async () => requests.length === 1
+      ? { unexpected: [] }
+      : { Search: [{ imdbID: "tt123", Title: "Backup Movie" }] } };
+  };
+  const result = await providers.searchChain({ query: "movie", category: "movies" });
+  assert.equal(result.provider, "omdb");
+  assert.equal(result.notice, "TMDB unavailable — using OMDb");
+  assert.equal(result.results[0].title, "Backup Movie");
+  assert.equal(requests.length, 2);
+});
+
+test("corrupt credential status is honest while public providers initialize", async () => {
+  providers.configureCredentialStore({
+    status: () => { throw new Error("corrupt private file"); },
+    get: () => { throw new Error("corrupt private file"); },
+    isProtected: () => true,
+  });
+  delete process.env.EVERIA_TMDB_TOKEN;
+  const status = providers.providerStatus("tmdb");
+  assert.equal(status.available, false);
+  assert.match(status.reason, /could not be read/);
+  assert.doesNotMatch(status.reason, /corrupt private file/);
+  global.fetch = async () => { throw new Error("offline"); };
+  const statuses = await providers.initializeProviders();
+  assert.equal(statuses.find((entry) => entry.id === "tmdb").available, false);
+  assert.equal(statuses.find((entry) => entry.id === "ranobedb").configured, true);
 });
 
 for (const [label, primaryResponse] of [

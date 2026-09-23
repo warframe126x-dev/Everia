@@ -74,3 +74,55 @@ test("RAWG and OMDb API keys use the same protected storage boundary", () => {
     clientIdHint: undefined,
   });
 });
+
+test("truncated credentials are preserved and cannot be silently replaced", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "everia-corrupt-"));
+  const filePath = path.join(directory, "credentials.json");
+  const original = '{"version":1,"providers":';
+  fs.writeFileSync(filePath, original);
+  const store = createCredentialStore({
+    filePath,
+    platform: "win32",
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(value),
+      decryptString: (value) => value.toString(),
+    },
+  });
+  assert.throws(() => store.status("tmdb"), /could not be read/);
+  assert.throws(() => store.get("tmdb"), /could not be read/);
+  assert.throws(() => store.save("tmdb", { token: "new secret" }), /could not be read/);
+  assert.throws(() => store.remove("tmdb"), /could not be read/);
+  assert.equal(fs.readFileSync(filePath, "utf8"), original);
+});
+
+test("unsupported credential document shape is preserved", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "everia-schema-"));
+  const filePath = path.join(directory, "credentials.json");
+  const original = '{"version":2,"providers":{}}';
+  fs.writeFileSync(filePath, original);
+  const store = createCredentialStore({
+    filePath,
+    platform: "win32",
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(value),
+    },
+  });
+  assert.throws(() => store.save("tmdb", { token: "new" }), /could not be read/);
+  assert.equal(fs.readFileSync(filePath, "utf8"), original);
+});
+
+test("credential write failure does not report a successful save", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "everia-write-"));
+  const store = createCredentialStore({
+    filePath: directory,
+    platform: "win32",
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(value),
+    },
+  });
+  assert.throws(() => store.save("tmdb", { token: "secret" }));
+  assert.equal(fs.statSync(directory).isDirectory(), true);
+});

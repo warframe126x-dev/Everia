@@ -56,6 +56,23 @@ test("accepts v0.7 provider references without changing local fields", () => {
   }
 });
 
+test("a valid v0.8 entry retains owned fields through validation", () => {
+  const item = {
+    ...base,
+    category: "manga",
+    subtype: "Manhwa",
+    notes: "Keep my progress",
+    coverUrl: "local-cover:existing",
+    providerMetadata: { volumes: 4, chapters: 25 },
+    providerReference: {
+      provider: "tenrai",
+      providerId: "42",
+      importedAt: "2026-09-10",
+    },
+  };
+  assert.deepEqual(validateItems([item]), [item]);
+});
+
 test("accepts Manga with both volumes and chapters", () => {
   const item = validateItems([
     {
@@ -98,8 +115,7 @@ test("rejects malformed Manga volume and chapter counts", () => {
     { chapters: 1.5 },
   ])
     assert.throws(
-      () =>
-        validateItems([{ ...base, category: "manga", providerMetadata }]),
+      () => validateItems([{ ...base, category: "manga", providerMetadata }]),
       /Invalid provider metadata/,
     );
 });

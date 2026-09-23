@@ -26,9 +26,13 @@ function createCredentialStore({
   const readDocument = () => {
     try {
       const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-      return parsed?.version === 1 && parsed.providers
-        ? parsed
-        : { version: 1, providers: {} };
+      if (
+        parsed?.version !== 1 ||
+        !parsed.providers ||
+        typeof parsed.providers !== "object" ||
+        Array.isArray(parsed.providers)
+      ) throw new Error("Invalid credential document.");
+      return parsed;
     } catch (error) {
       if (error?.code === "ENOENT") return { version: 1, providers: {} };
       throw new Error("Saved provider credentials could not be read.");

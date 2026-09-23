@@ -74,7 +74,7 @@ function credentialsFor(provider) {
   try {
     stored = credentialStore?.get(provider);
   } catch {
-    return undefined;
+    throw new Error("Saved provider credentials could not be read.");
   }
   if (stored) return stored;
   if (provider === "igdb") {
@@ -106,13 +106,29 @@ class ProviderError extends Error {
 function providerStatus(id) {
   const provider = PROVIDERS[id];
   if (!provider) throw new Error("Unknown metadata provider.");
-  const storedStatus = credentialStore?.status(id);
+  let storedStatus;
+  let credentialReadFailed = false;
+  if (provider.requiresCredentials) {
+    try {
+      storedStatus = credentialStore?.status(id);
+    } catch {
+      credentialReadFailed = true;
+    }
+  }
   const protectedStorageAvailable = credentialStore
     ? credentialStore.isProtected()
     : true;
-  const configured = provider.requiresCredentials
-    ? Boolean(credentialsFor(id))
-    : true;
+  let configured = true;
+  if (provider.requiresCredentials) {
+    configured = false;
+    if (!credentialReadFailed) {
+      try {
+        configured = Boolean(credentialsFor(id));
+      } catch {
+        credentialReadFailed = true;
+      }
+    }
+  }
   const connectionState = connectionStates.get(id);
   const failed = connectionState === "connection-failed";
   return {
@@ -120,16 +136,20 @@ function providerStatus(id) {
     ...provider,
     configured,
     available: configured,
-    state: !configured
-      ? "not-configured"
+    state: credentialReadFailed
+      ? "connection-failed"
+      : !configured
+        ? "not-configured"
       : failed
         ? "connection-failed"
         : connectionState === "connected"
           ? "connected"
           : "unchecked",
     clientIdHint: storedStatus?.clientIdHint,
-    reason: !configured
-      ? storedStatus?.configured && !protectedStorageAvailable
+    reason: credentialReadFailed
+      ? "Saved provider credentials could not be read. The file has been preserved."
+      : !configured
+        ? storedStatus?.configured && !protectedStorageAvailable
         ? "Protected credential storage is unavailable on this device."
         : `${provider.name} is not connected. Configure ${provider.name} in Settings → Online Sources.`
       : failed
@@ -159,7 +179,7 @@ async function fetchResponse(
   url,
   init,
   providerName = "online source",
-  { attempts = 1, timeoutMs = 15000 } = {},
+  { attempts = 1, timeoutMs = 15000, allowRedirectResponse = false } = {},
 ) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let response;
@@ -180,6 +200,8 @@ async function fetchResponse(
         true,
       );
     }
+    if (allowRedirectResponse && response.status >= 300 && response.status < 400)
+      return response;
     if (response.status === 401 || response.status === 403)
       throw new ProviderError(
         `${providerName} rejected the saved credentials.`,
@@ -231,6 +253,15 @@ async function fetchJson(url, init, providerName, options) {
       true,
     );
   }
+}
+function resultArray(data, key, providerName) {
+  const results = key ? data?.[key] : data;
+  if (Array.isArray(results)) return results;
+  throw new ProviderError(
+    `${providerName} returned an unreadable response.`,
+    "unavailable",
+    true,
+  );
 }
 
 function epochDate(value) {
@@ -341,11 +372,10 @@ const IGDB_FIELDS =
   "fields name,alternative_names.name,cover.image_id,first_release_date,genres.name,platforms.name,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,franchise.name,collection.name,summary,url;";
 async function searchIgdb(query) {
   const escaped = query.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
-  return (
-    await igdbRequest(
-      `${IGDB_FIELDS} search "${escaped}"; where version_parent = null; limit 20;`,
-    )
-  ).map(normalizeIgdb);
+  const data = await igdbRequest(
+    `${IGDB_FIELDS} search "${escaped}"; where version_parent = null; limit 20;`,
+  );
+  return resultArray(data, undefined, "IGDB").map(normalizeIgdb);
 }
 async function detailsIgdb(id) {
   if (!/^\d+$/.test(id)) throw new Error("Invalid IGDB item.");
@@ -401,7 +431,7 @@ async function searchRawg(query) {
     search_precise: "true",
     page_size: "20",
   });
-  return (data.results || []).map(normalizeRawg);
+  return resultArray(data, "results", "RAWG").map(normalizeRawg);
 }
 async function detailsRawg(id) {
   if (!/^\d+$/.test(id)) throw new Error("Invalid RAWG item.");
@@ -471,7 +501,7 @@ async function searchTmdb(query, category) {
     { headers: tmdbHeaders() },
     "TMDB",
   );
-  return (data.results || [])
+  return resultArray(data, "results", "TMDB")
     .slice(0, 20)
     .map((item) => normalizeTmdb(item, category));
 }
@@ -557,7 +587,8 @@ async function searchOmdb(query, category) {
     type: category === "movies" ? "movie" : "series",
     page: "1",
   });
-  return (data.Search || [])
+  if (data.Response === "False" && data.Error === "Movie not found!") return [];
+  return resultArray(data, "Search", "OMDb")
     .slice(0, 20)
     .map((item) => normalizeOmdb(item, category));
 }
@@ -575,7 +606,9 @@ function ranobeCover(image) {
     : undefined;
 }
 function normalizeRanobeSearch(series) {
-  const volumes = Number(series.volumes?.count ?? series.c_num_books);
+  const volumes = optionalPositiveInteger(
+    series.volumes?.count ?? series.c_num_books,
+  );
   return {
     provider: "ranobedb",
     providerName: "RanobeDB",
@@ -591,7 +624,7 @@ function normalizeRanobeSearch(series) {
     metadata: {
       originalTitle: series.title_orig || undefined,
       alternateTitles: names([series.romaji_orig]),
-      volumes: Number.isFinite(volumes) ? volumes : undefined,
+      volumes,
     },
   };
 }
@@ -606,7 +639,7 @@ async function searchRanobe(query) {
     undefined,
     "RanobeDB",
   );
-  return (data.series || []).map(normalizeRanobeSearch);
+  return resultArray(data, "series", "RanobeDB").map(normalizeRanobeSearch);
 }
 async function detailsRanobe(id) {
   if (!/^\d+$/.test(id)) throw new Error("Invalid RanobeDB item.");
@@ -733,13 +766,13 @@ async function searchTenrai(query, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.8 (Windows desktop media library)",
+        "User-Agent": "Everia/0.9 (Windows desktop media library)",
       },
     },
     "Tenrai",
     { attempts: 2, timeoutMs: 12000 },
   );
-  return (data.data || []).map((item) =>
+  return resultArray(data, "data", "Tenrai").map((item) =>
     normalizeMalCompatible(item, category, "tenrai"),
   );
 }
@@ -751,7 +784,7 @@ async function detailsTenrai(id, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.8 (Windows desktop media library)",
+        "User-Agent": "Everia/0.9 (Windows desktop media library)",
       },
     },
     "Tenrai",
@@ -768,13 +801,13 @@ async function searchJikan(query, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.8 (Windows desktop media library)",
+        "User-Agent": "Everia/0.9 (Windows desktop media library)",
       },
     },
     "Jikan",
     { attempts: 2, timeoutMs: 12000 },
   );
-  return (data.data || []).map((item) =>
+  return resultArray(data, "data", "Jikan").map((item) =>
     normalizeMalCompatible(item, category, "jikan"),
   );
 }
@@ -786,7 +819,7 @@ async function detailsJikan(id, category) {
     {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Everia/0.8 (Windows desktop media library)",
+        "User-Agent": "Everia/0.9 (Windows desktop media library)",
       },
     },
     "Jikan",
@@ -911,7 +944,7 @@ async function testConnection(provider) {
         {
           headers: {
             Accept: "application/json",
-            "User-Agent": "Everia/0.8 (Windows desktop media library)",
+            "User-Agent": "Everia/0.9 (Windows desktop media library)",
           },
         },
         "Tenrai",
@@ -923,7 +956,7 @@ async function testConnection(provider) {
         {
           headers: {
             Accept: "application/json",
-            "User-Agent": "Everia/0.8 (Windows desktop media library)",
+            "User-Agent": "Everia/0.9 (Windows desktop media library)",
           },
         },
         "Jikan",
@@ -946,14 +979,23 @@ async function initializeProviders() {
   return allProviderConfigurations();
 }
 async function downloadImage(rawUrl) {
-  const url = new URL(rawUrl);
-  if (url.protocol !== "https:" || !ALLOWED_IMAGE_HOSTS.has(url.hostname))
-    throw new Error("This source image cannot be cached by Everia.");
-  const response = await fetchResponse(
-    url.href,
-    { credentials: "omit" },
-    "image source",
-  );
+  let url = new URL(rawUrl);
+  let response;
+  for (let redirects = 0; redirects <= 5; redirects += 1) {
+    if (url.protocol !== "https:" || !ALLOWED_IMAGE_HOSTS.has(url.hostname))
+      throw new Error("This source image cannot be cached by Everia.");
+    response = await fetchResponse(
+      url.href,
+      { credentials: "omit", redirect: "manual" },
+      "image source",
+      { allowRedirectResponse: true },
+    );
+    if (response.status < 300 || response.status >= 400) break;
+    if (redirects === 5) throw new Error("The source image redirected too many times.");
+    const location = response.headers.get("location");
+    if (!location) throw new Error("The source image redirect is incomplete.");
+    url = new URL(location, url);
+  }
   const type = response.headers.get("content-type")?.split(";")[0] || "";
   if (!type.startsWith("image/"))
     throw new Error("The source did not return a supported image.");

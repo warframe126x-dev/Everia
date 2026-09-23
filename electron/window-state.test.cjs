@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const {
   centeredInitialBounds,
+  loadWindowState,
   resolveWindowState,
   responsiveProgress,
   responsiveZoom,
@@ -33,6 +37,16 @@ test("a disconnected remembered monitor restores safely on the primary display",
   assert.equal(restored.maximized, true);
   assert.ok(restored.bounds.x + restored.bounds.width <= 1920);
   assert.ok(restored.bounds.y + restored.bounds.height <= 1040);
+});
+
+test("corrupt window state falls back without changing the saved file", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "everia-window-"));
+  const filePath = path.join(directory, "window-state.v1.json");
+  const original = '{"version":1,"bounds":';
+  fs.writeFileSync(filePath, original);
+  const restored = resolveWindowState(loadWindowState(filePath), [primary], primary);
+  assert.deepEqual(restored, { bounds: centeredInitialBounds(primary.workArea), maximized: false });
+  assert.equal(fs.readFileSync(filePath, "utf8"), original);
 });
 
 test("responsive zoom preserves baseline and reaches a bounded 2K scale", () => {

@@ -179,6 +179,7 @@ function App() {
     );
     storage.saveItems(next);
     setItems(next);
+    setError("");
     setSelected(savedItem);
     return savedItem;
   };
@@ -429,10 +430,12 @@ function App() {
             onSave={(item) => {
               try {
                 upsertItem(item);
+                return true;
               } catch {
                 setError(
                   "Changes could not be saved. Check storage space and retry.",
                 );
+                return false;
               }
             }}
             onDelete={() => removeItem(selected.id)}

@@ -54,6 +54,64 @@ test("details are read-only until Edit, then save status, rating and notes", asy
   expect(screen.queryByLabelText("My notes")).toBeNull();
 });
 
+test("failed entry persistence keeps edits recoverable and rejects quick changes", async () => {
+  localStorage.setItem(
+    "everia.items.v1",
+    JSON.stringify([
+      {
+        id: "existing",
+        title: "Original",
+        category: "games",
+        status: "Planning",
+        favorite: false,
+        dateAdded: "2026-01-01",
+        notes: "Old note",
+      },
+    ]),
+  );
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Games/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Open Original/ }));
+  const originalSetItem = Storage.prototype.setItem;
+  let fail = true;
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(
+    function (key, value) {
+      if (fail && key === "everia.items.v1") throw new Error("quota exceeded");
+      return originalSetItem.call(this, key, value);
+    },
+  );
+  fireEvent.change(screen.getByLabelText("Status"), {
+    target: { value: "Completed" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Add to favorites" }));
+  expect(JSON.parse(localStorage.getItem("everia.items.v1")!)[0].status).toBe(
+    "Planning",
+  );
+  expect(
+    screen.getByRole("button", { name: "Add to favorites" }),
+  ).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText("My notes"), {
+    target: { value: "Draft survives" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Save Changes/ }));
+  expect(await screen.findByDisplayValue("Draft survives")).toBeDefined();
+  expect(
+    screen.getAllByText(/Changes could not be saved/).length,
+  ).toBeGreaterThan(0);
+  expect(JSON.parse(localStorage.getItem("everia.items.v1")!)[0].notes).toBe(
+    "Old note",
+  );
+  fail = false;
+  fireEvent.click(screen.getByRole("button", { name: /Save Changes/ }));
+  await waitFor(() =>
+    expect(JSON.parse(localStorage.getItem("everia.items.v1")!)[0].notes).toBe(
+      "Draft survives",
+    ),
+  );
+  expect(screen.queryByLabelText("My notes")).toBeNull();
+});
+
 test("Home artwork resolves from the app document and outer branding is removed", () => {
   const { container } = render(<App />);
   expect(container.querySelector(".home-header")).toBeNull();

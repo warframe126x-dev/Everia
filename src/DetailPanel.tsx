@@ -85,7 +85,7 @@ export function DetailPanel({
   item: MediaItem;
   returnLabel: string;
   onClose: () => void;
-  onSave: (item: MediaItem) => void;
+  onSave: (item: MediaItem) => boolean;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -119,7 +119,10 @@ export function DetailPanel({
       if (coverFile) coverUrl = await storeCover(coverFile);
       else if (coverUrl && !coverUrl.startsWith("local-cover:"))
         coverUrl = await storeCover(coverUrl);
-      onSave({ ...draft, title: draft.title.trim(), coverUrl });
+      if (!onSave({ ...draft, title: draft.title.trim(), coverUrl })) {
+        setError("Changes could not be saved. Check storage space and retry.");
+        return;
+      }
       setEditing(false);
     } catch (caught) {
       setError(

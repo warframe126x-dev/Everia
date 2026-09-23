@@ -1,4 +1,4 @@
-# Everia v0.7
+# Everia v0.9
 
 **Your Personal Universe** — a local-first Windows media Codex for Games, Movies, TV Shows, Novels, Manga and Anime.
 
@@ -18,7 +18,14 @@ npm run build
 npm run package:win
 ```
 
-## v0.7 provider redundancy and responsive polish
+## v0.9 hardening
+
+- Failed entry saves keep the edit draft available for retry; quick changes remain unsaved when storage fails.
+- Malformed provider search responses can use the established backup chain while valid empty results stay successful.
+- Corrupt credential files are preserved and reported, and cached image redirects obey the provider host policy.
+- The Windows x64 release remains portable; the installer is planned for v1.0.
+
+### Preserved v0.7 provider and responsive behavior
 
 - The approved v0.5 interface remains the visual baseline at normal window sizes.
 - A display-aware scale now grows the complete interface progressively from the 1080p class through 2560×1440, including the sidebar, content, controls, cards, forms and typography.
@@ -26,7 +33,7 @@ npm run package:win
 - Everia remembers the last valid monitor, window bounds and maximized state, while preventing off-screen restoration after monitor changes.
 - The Home category icons are 15% larger; Home branding, quote and Settings scale further at 2K while the approved composition remains unchanged.
 - Expanded libraries stay anchored to the sidebar and allow their grid to use the available width.
-- Provider chains fail over only for unavailable services, timeouts, network errors, HTTP 429 and HTTP 5xx responses. A valid zero-result search does not query a backup.
+- Provider chains fail over for unavailable services, malformed responses, timeouts, network errors, HTTP 429 and HTTP 5xx responses. A valid zero-result search does not query a backup.
 - Games use IGDB → RAWG, Movies and TV Shows use TMDB → OMDb, Anime and Manga use Tenrai → Jikan, and Novels continue to use RanobeDB. Manual Entry remains available for every category.
 - Jikan retains bounded retries and honest connection state as the Anime/Manga backup.
 - Large-window refinements give the persistent rail and secondary controls restrained additional scale while preserving the approved dense Library and Entry Details compositions.
@@ -54,7 +61,7 @@ Everia keeps the original `everia.items.v1` metadata key so existing entries, ra
 
 Selected cover and wallpaper files are copied as image bytes into Everia's own local storage. Built-in artwork is packaged with the app. Runtime display does not depend on external image URLs. An optional HTTPS cover URL in the manual form is downloaded once and stored locally before the entry is saved.
 
-The portable Windows build stores its profile under `%APPDATA%\Everia` by default. Do not delete that folder if it contains the only copy of a valuable test library. Export/backup and native SQLite storage are planned for a later revision and are not part of v0.7.
+The portable Windows build stores its profile under `%APPDATA%\Everia` by default. Do not delete that folder if it contains the only copy of a valuable test library. Export/backup and native SQLite storage are planned for a later revision and are not part of v0.9.
 
 ## Online source configuration
 
@@ -72,4 +79,4 @@ Use **Test Connection** to verify each source. On Windows, credential values are
 
 ## Scope
 
-v0.7 adds provider redundancy without cross-provider metadata merging or changing Everia's local data ownership. It does not add cloud sync, social features, new categories, themes, scraping, deduplication redesign, or a database migration. Manual entries remain supported permanently.
+v0.9 retains provider redundancy without cross-provider metadata merging or changing Everia's local data ownership. It does not add cloud sync, social features, new categories, themes, scraping, deduplication redesign, or a database migration. Manual entries remain supported permanently.
