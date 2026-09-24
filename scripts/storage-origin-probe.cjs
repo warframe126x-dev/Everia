@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "everia-origin-"));
 const profileBase = process.env.APPDATA;
@@ -162,6 +162,12 @@ const read = `(async () => {
       console.log("observation", JSON.stringify(observations.at(-1)));
       await stop();
       if (i === 0) {
+        const recovery = spawnSync(require("electron"), [
+          path.resolve("scripts/legacy-origin-recovery-probe.cjs"), legacyUrl
+        ], { encoding: "utf8", timeout: 20000 });
+        console.log("virtual recovery", JSON.stringify({
+          status: recovery.status, stdout: recovery.stdout, stderr: recovery.stderr
+        }));
         console.log("profile location", profile, "exists", fs.existsSync(profile));
         const credentials = fs.readFileSync(path.join(profile,"provider-credentials.v1.json"),"utf8");
         assert(!credentials.includes("fixture-secret"), "Plaintext credential leaked");
