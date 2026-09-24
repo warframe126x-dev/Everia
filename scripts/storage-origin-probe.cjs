@@ -158,7 +158,15 @@ const read = `(async () => {
       observations.push({ label, ...result });
       await stop();
       if (i === 0) {
+        fs.writeFileSync(path.join(profile, "window-state.v1.json"), JSON.stringify({
+          version: 1, displayId: "fixture-disconnected-monitor",
+          bounds: { x: 100, y: 100, width: 1200, height: 800 }, maximized: false,
+        }));
         await launch("original-restart", directory);
+        const windowInfo = await command("Browser.getWindowForTarget");
+        console.log("restored window", JSON.stringify(windowInfo.bounds));
+        assert.equal(windowInfo.bounds.width, 1200);
+        assert.equal(windowInfo.bounds.height, 800);
         await delay(300);
         const restart = await evaluate(read);
         console.log("original restart", JSON.stringify(restart));
