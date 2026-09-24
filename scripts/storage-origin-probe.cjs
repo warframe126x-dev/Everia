@@ -3,10 +3,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const crypto = require("node:crypto");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "everia-origin-"));
-const profileBase = process.env.APPDATA;
-const profile = path.join(profileBase, "Everia");
+const profile = path.join(process.env.APPDATA, "Everia");
 const packageDir = path.resolve("release/Everia-win32-x64");
 const destinations = [
   ["original-portable", path.join(root, "original-portable")],
@@ -139,13 +139,11 @@ const read = `(async () => {
 (async () => {
   try {
     const observations = [];
-    let legacyUrl;
     for (let i = 0; i < destinations.length; i++) {
       const [label, directory] = destinations[i];
       await launch(label, directory);
       if (i === 0) {
-        legacyUrl = (await evaluate("location.href"));
-        console.log("seed", JSON.stringify(await evaluate(seed)));
+console.log("seed", JSON.stringify(await evaluate(seed)));
         console.log("credential save response", JSON.stringify(await evaluate(`window.everiaProviders.saveCredentials({provider:"tmdb",credentials:{token:"fixture-secret"}})`)));
         // The credential save occurs before the network connection test.
         await delay(1000);
@@ -156,35 +154,28 @@ const read = `(async () => {
       await delay(200);
       const result = await evaluate(read);
       observations.push({ label, ...result });
-      if (i > 0) {
-        for (const securityOrigin of [legacyUrl, new URL(legacyUrl).origin, 'file://']) {
-          try {
-            const found = await command('DOMStorage.getDOMStorageItems', { storageId: { securityOrigin, isLocalStorage: true } });
-            console.log('legacy CDP lookup', JSON.stringify({ label, securityOrigin, entries: found.entries }));
-          } catch (error) { console.log('legacy CDP lookup error', JSON.stringify({ securityOrigin, error: String(error) })); }
-        }
-      }
-      console.log("observation", JSON.stringify(observations.at(-1)));
       await stop();
       if (i === 0) {
         await launch("original-restart", directory);
         await delay(300);
         const restart = await evaluate(read);
         console.log("original restart", JSON.stringify(restart));
+        assert.deepEqual(restart.values, result.values, "same-path restart lost localStorage");
+        assert.deepEqual(restart.cover, result.cover);
+        assert.deepEqual(restart.wallpaper, result.wallpaper);
         await stop();
-        const recovery = spawnSync(require("electron"), [
-          path.resolve("scripts/legacy-origin-recovery-probe.cjs"), legacyUrl
-        ], { encoding: "utf8", timeout: 20000 });
-        console.log("virtual recovery", JSON.stringify({
-          status: recovery.status, stdout: recovery.stdout, stderr: recovery.stderr
-        }));
         console.log("profile location", profile, "exists", fs.existsSync(profile));
         const credentials = fs.readFileSync(path.join(profile,"provider-credentials.v1.json"),"utf8");
         assert(!credentials.includes("fixture-secret"), "Plaintext credential leaked");
-        fs.writeFileSync(path.join(profile,"window-state.v1.json"),
-          JSON.stringify({version:1,displayId:"1",bounds:{x:100,y:100,width:1600,height:900},maximized:false}));
+        assert(fs.existsSync(path.join(profile, "window-state.v1.json")));
+        var credentialHash = crypto.createHash("sha256").update(credentials).digest("hex");
       }
     }
+    const afterCredentials = fs.readFileSync(path.join(profile, "provider-credentials.v1.json"));
+    assert.equal(crypto.createHash("sha256").update(afterCredentials).digest("hex"), credentialHash, "credentials changed during path moves");
+    const verification = spawnSync(require("electron"), [path.resolve("scripts/profile-verification.cjs")], { encoding: "utf8", timeout: 20000 });
+    console.log("profile verification", JSON.stringify({ status: verification.status, stdout: verification.stdout, stderr: verification.stderr }));
+    assert.equal(verification.status, 0, "credential or window state verification failed");
     const first=observations[0];
     for (const row of observations) {
       assert.deepEqual(row.values, first.values, `localStorage changed at ${row.label}`);
@@ -192,7 +183,7 @@ const read = `(async () => {
       assert.deepEqual(row.wallpaper, first.wallpaper, `wallpaper lost at ${row.label}`);
       assert.equal(row.renderedEntries, true, `library did not render at ${row.label}`);
     }
-    console.log("RESULT: all four paths preserve renderer library and IndexedDB assets");
+    console.log("RESULT: same-path restart and all four paths preserve v0.9 library, IndexedDB assets, credentials, and window state");
   } catch (error) {
     console.error("RESULT: storage-origin compatibility failed",error);
     process.exitCode=1;
