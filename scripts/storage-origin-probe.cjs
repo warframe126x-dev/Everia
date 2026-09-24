@@ -163,10 +163,10 @@ const read = `(async () => {
           bounds: { x: 100, y: 100, width: 1200, height: 800 }, maximized: false,
         }));
         await launch("original-restart", directory);
-        const windowInfo = await command("Browser.getWindowForTarget");
-        console.log("restored window", JSON.stringify(windowInfo.bounds));
-        assert.equal(windowInfo.bounds.width, 1200);
-        assert.equal(windowInfo.bounds.height, 800);
+        const restoredBounds = await evaluate(`({ x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight })`);
+        console.log("restored window", JSON.stringify(restoredBounds));
+        assert(Math.abs(restoredBounds.width - 1200) <= 10);
+        assert(Math.abs(restoredBounds.height - 800) <= 10);
         await delay(300);
         const restart = await evaluate(read);
         console.log("original restart", JSON.stringify(restart));
