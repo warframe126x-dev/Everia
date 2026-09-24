@@ -47,14 +47,22 @@ async function evaluate(expression) {
   if (result.exceptionDetails) throw Error(JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
+async function waitFor(expression) {
+  for (let i=0;i<50;i++) {
+    if (await evaluate(expression)) return;
+    await delay(100);
+  }
+  throw new Error(`Timed out waiting for the packaged UI: ${expression}`);
+}
 async function saveThroughUI(title) {
   console.log("Saving through the UI",title);
+  await waitFor(`!!document.querySelector(".category-card")`);
   await evaluate(`document.querySelector(".category-card")?.click()`);
-  await delay(150);
+  await waitFor(`Array.from(document.querySelectorAll("button")).some(b=>b.textContent.includes("Add item"))`);
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes("Add item"))?.click()`);
-  await delay(150);
+  await waitFor(`Array.from(document.querySelectorAll("button")).some(b=>b.textContent.includes("Manual entry"))`);
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes("Manual entry"))?.click()`);
-  await delay(150);
+  await waitFor(`Array.from(document.querySelectorAll("label")).some(x=>x.textContent.trim()==="Title" && x.querySelector("input"))`);
   const state=await evaluate(`(() => {
     const label=Array.from(document.querySelectorAll("label")).find(x=>x.textContent.trim()==="Title");
     const input=label?.querySelector("input");
