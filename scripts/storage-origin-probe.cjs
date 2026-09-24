@@ -134,10 +134,12 @@ const read = `(async () => {
 (async () => {
   try {
     const observations = [];
+    let legacyUrl;
     for (let i = 0; i < destinations.length; i++) {
       const [label, directory] = destinations[i];
       await launch(label, directory);
       if (i === 0) {
+        legacyUrl = (await evaluate("location.href"));
         console.log("seed", JSON.stringify(await evaluate(seed)));
         console.log("credential save response", JSON.stringify(await evaluate(`window.everiaProviders.saveCredentials({provider:"tmdb",credentials:{token:"fixture-secret"}})`)));
         // The credential save occurs before the network connection test.
@@ -149,6 +151,14 @@ const read = `(async () => {
       await delay(200);
       const result = await evaluate(read);
       observations.push({ label, ...result });
+      if (i > 0) {
+        for (const securityOrigin of [legacyUrl, new URL(legacyUrl).origin, 'file://']) {
+          try {
+            const found = await command('DOMStorage.getDOMStorageItems', { storageId: { securityOrigin, isLocalStorage: true } });
+            console.log('legacy CDP lookup', JSON.stringify({ label, securityOrigin, entries: found.entries }));
+          } catch (error) { console.log('legacy CDP lookup error', JSON.stringify({ securityOrigin, error: String(error) })); }
+        }
+      }
       console.log("observation", JSON.stringify(observations.at(-1)));
       await stop();
       if (i === 0) {
