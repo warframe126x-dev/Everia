@@ -5,8 +5,8 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "everia-origin-"));
-const profileBase = path.join(root, "profile");
-fs.mkdirSync(profileBase, { recursive: true });
+const profileBase = process.env.APPDATA;
+const profile = path.join(profileBase, "Everia");
 const packageDir = path.resolve("release/Everia-win32-x64");
 const destinations = [
   ["original-portable", path.join(root, "original-portable")],
@@ -62,7 +62,7 @@ async function evaluate(expression) {
 async function launch(label, directory) {
   fs.cpSync(packageDir, directory, { recursive: true });
   active = spawn(path.join(directory, "Everia.exe"), [`--remote-debugging-port=${port}`], {
-    env: { ...process.env, APPDATA: profileBase }, stdio: "ignore",
+    env: { ...process.env }, stdio: "ignore",
   });
   const url = await connect();
   console.log(JSON.stringify({ path: label, url, pid: active.pid }));
@@ -139,16 +139,20 @@ const read = `(async () => {
       await launch(label, directory);
       if (i === 0) {
         console.log("seed", JSON.stringify(await evaluate(seed)));
-        await evaluate(`window.everiaProviders.saveCredentials({provider:"tmdb",credentials:{token:"fixture-secret"}})`);
+        console.log("credential save response", JSON.stringify(await evaluate(`window.everiaProviders.saveCredentials({provider:"tmdb",credentials:{token:"fixture-secret"}})`)));
         // The credential save occurs before the network connection test.
         await delay(1000);
       }
+      await command("Page.reload");
+      await delay(1200);
+      await evaluate(`document.querySelector(".category-card")?.click()`);
+      await delay(200);
       const result = await evaluate(read);
       observations.push({ label, ...result });
       console.log("observation", JSON.stringify(observations.at(-1)));
       await stop();
-      const profile = path.join(profileBase, "Everia");
       if (i === 0) {
+        console.log("profile location", profile, "exists", fs.existsSync(profile));
         const credentials = fs.readFileSync(path.join(profile,"provider-credentials.v1.json"),"utf8");
         assert(!credentials.includes("fixture-secret"), "Plaintext credential leaked");
         fs.writeFileSync(path.join(profile,"window-state.v1.json"),
