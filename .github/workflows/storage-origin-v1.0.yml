@@ -25,6 +25,29 @@ jobs:
           cache: npm
       - name: Install and build the exact v0.9 app
         run: npm ci
-      - run: npm run package:win
+      - run: npm run build
+      - name: Package using the proven PowerShell invocation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packagerArgs = @(
+            "--no-install"
+            "electron-packager"
+            "."
+            "Everia"
+            "--platform=win32"
+            "--arch=x64"
+            "--app-version=0.9.0"
+            "--icon=public/assets/branding/everia-windows-icon.ico"
+            "--out=release"
+            "--overwrite"
+            "--asar"
+            "--prune=true"
+            "--ignore=^/(src|upload|release|node_modules/.cache)(/|$)"
+            "--ignore=\.(zip|tsbuildinfo)$"
+            "--ignore=^/.*\.(spec\.tsx|test\.ts|providers\.test\.cjs|credential-store\.test\.cjs|window-state\.test\.cjs)$"
+          )
+          & npx @packagerArgs
+          if ($LASTEXITCODE -ne 0) { throw "Packager failed: $LASTEXITCODE" }
       - name: Launch from four paths against one v0.9 profile
         run: node scripts/storage-origin-probe.cjs
