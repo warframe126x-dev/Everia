@@ -64,7 +64,8 @@ async function waitForUI(expression) {
     if (await evaluate(expression)) return;
     await delay(100);
   }
-  throw new Error(`Packaged Everia did not render expected UI: ${expression}`);
+  const diagnostics = await evaluate(`({ url: location.href, body: document.body.innerText.slice(0, 600), backupBridge: !!window.everiaBackup })`);
+  throw new Error(`Packaged Everia did not render expected UI: ${expression}; ${JSON.stringify(diagnostics)}`);
 }
 async function launch(label, directory) {
   if (!fs.existsSync(path.join(directory, "Everia.exe")))

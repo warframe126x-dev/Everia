@@ -8,7 +8,8 @@ const {
   dialog,
 } = require("electron");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
+const fs = require("node:fs");
+const { fileURLToPath } = require("node:url");
 const { createBackupStore } = require("./backup-store.cjs");
 const providers = require("./providers.cjs");
 const { createCredentialStore } = require("./credential-store.cjs");
@@ -199,8 +200,16 @@ let backupStore;
 function backupHandler(action) {
   return async (event, input) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window || window.isDestroyed() ||
-        event.sender.getURL() !== pathToFileURL(path.join(__dirname, "..", "dist", "index.html")).href)
+    let trusted = false;
+    try {
+      const actual = fileURLToPath(event.sender.getURL());
+      const root = path.resolve(actual, "..", "..");
+      trusted = path.basename(actual).toLowerCase() === "index.html" &&
+        path.basename(path.dirname(actual)).toLowerCase() === "dist" &&
+        fs.realpathSync.native(root).toLowerCase() ===
+          fs.realpathSync.native(path.join(__dirname, "..")).toLowerCase();
+    } catch { /* Missing or non-file renderer never receives backup access. */ }
+    if (!window || window.isDestroyed() || !trusted)
       throw new Error("Invalid backup caller.");
     return action(window, input);
   };
