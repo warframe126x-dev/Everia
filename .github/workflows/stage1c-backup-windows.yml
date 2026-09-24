@@ -12,6 +12,7 @@ on:
       - 'src/main.tsx'
       - 'src/vite-env.d.ts'
       - 'scripts/persistence-durability-probe.cjs'
+      - 'scripts/storage-origin-probe.cjs'
       - '.github/workflows/stage1c-backup-windows.yml'
       - 'package.json'
       - 'vite.config.ts'
