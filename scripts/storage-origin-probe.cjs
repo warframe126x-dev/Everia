@@ -114,8 +114,9 @@ const seed = `(async () => {
       tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
     });
   }
-  await put("covers","local-cover:origin",[137,80,78,71,1,2,3,4]);
-  await put("wallpapers","local-wallpaper:origin",[137,80,78,71,5,6,7,8]);
+  const png = Array.from(Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl3R6sAAAAASUVORK5CYII="),c=>c.charCodeAt(0)));
+  await put("covers","local-cover:origin",png);
+  await put("wallpapers","local-wallpaper:origin",png);
   db.close();
   return { items: items.length, origin: location.href };
 })()`;
@@ -139,11 +140,12 @@ const read = `(async () => {
 (async () => {
   try {
     const observations = [];
+    let credentialHash;
     for (let i = 0; i < destinations.length; i++) {
       const [label, directory] = destinations[i];
       await launch(label, directory);
       if (i === 0) {
-console.log("seed", JSON.stringify(await evaluate(seed)));
+        console.log("seed", JSON.stringify(await evaluate(seed)));
         console.log("credential save response", JSON.stringify(await evaluate(`window.everiaProviders.saveCredentials({provider:"tmdb",credentials:{token:"fixture-secret"}})`)));
         // The credential save occurs before the network connection test.
         await delay(1000);
@@ -168,7 +170,7 @@ console.log("seed", JSON.stringify(await evaluate(seed)));
         const credentials = fs.readFileSync(path.join(profile,"provider-credentials.v1.json"),"utf8");
         assert(!credentials.includes("fixture-secret"), "Plaintext credential leaked");
         assert(fs.existsSync(path.join(profile, "window-state.v1.json")));
-        var credentialHash = crypto.createHash("sha256").update(credentials).digest("hex");
+        credentialHash = crypto.createHash("sha256").update(credentials).digest("hex");
       }
     }
     const afterCredentials = fs.readFileSync(path.join(profile, "provider-credentials.v1.json"));
