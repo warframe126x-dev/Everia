@@ -46,6 +46,7 @@ async function populate() {
 }
 test("complete logical round trip preserves all fields, preferences and image bytes", async () => {
   await populate();
+  localStorage.setItem("unrelated.credentials", "secret that must never be exported");
   const backup = await createBackup("1.0.0","2026-09-24T10:00:00.000Z");
   const parsed = await parseBackup(backup);
   expect(parsed.data.items).toHaveLength(2);
@@ -55,6 +56,19 @@ test("complete logical round trip preserves all fields, preferences and image by
   expect(Array.from(new Uint8Array(await parsed.assets[1].blob.arrayBuffer()))).toEqual([4,5,6,7]);
   expect(backup).not.toContain("clientSecret");
   expect(backup).not.toContain("provider-credentials");
+  expect(backup).not.toContain("secret that must never be exported");
+});
+test("a reasonable large multi-category library round-trips deterministically", async () => {
+  const categories = ["games","movies","tv-series","novels","manga","anime"];
+  const items = Array.from({length:1000},(_,index) => {
+    const {coverUrl, ...withoutImage} = item(`entry-${index}`,categories[index % categories.length]);
+    return withoutImage;
+  });
+  localStorage.setItem("everia.items.v1",JSON.stringify(items));
+  const first = await createBackup("1.0.0","2026-09-24T10:00:00.000Z");
+  const second = await createBackup("1.0.0","2026-09-24T10:00:00.000Z");
+  expect(first).toBe(second);
+  expect((await parseBackup(first)).data.items).toHaveLength(1000);
 });
 test("empty library and unsupported, malformed, truncated or tampered backups", async () => {
   expect((await parseBackup(await createBackup("1.0.0"))).data.items).toEqual([]);

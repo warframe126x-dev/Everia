@@ -209,6 +209,7 @@ export async function restoreSelectedBackup(): Promise<boolean> {
   const file = await window.everiaBackup?.selectBackup();
   if (!file) return false;
   await restoreBackup(file);
+  window.location.reload(); // Recreate React state from the verified authoritative storage.
   return true;
 }
 export async function scheduleAutomaticBackup(): Promise<void> {

@@ -9,17 +9,22 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let active, socket, port, sequence = 0;
 const pending = new Map();
 async function launch(profile) {
+  console.log("Launching",path.basename(profile));
   port = 10400 + Math.floor(Math.random() * 1000);
   active = spawn(executable, [`--remote-debugging-port=${port}`], {
     env: {...process.env, APPDATA:profile}, stdio:"ignore",
   });
+  active.on("error",(error)=>{ console.error("Packaged application launch failed",error); });
   for (let i=0;i<120;i++) {
     try {
-      const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+      const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`,{signal:AbortSignal.timeout(2000)})).json();
       const page = pages.find((entry)=>entry.type === "page" && entry.url.startsWith("file:"));
       if (!page) { await delay(250); continue; }
       socket = new WebSocket(page.webSocketDebuggerUrl);
-      await new Promise((resolve,reject)=>{socket.addEventListener("open",resolve,{once:true});socket.addEventListener("error",reject,{once:true});});
+      await Promise.race([
+        new Promise((resolve,reject)=>{socket.addEventListener("open",resolve,{once:true});socket.addEventListener("error",reject,{once:true});}),
+        delay(5000).then(()=>{throw Error("CDP WebSocket connection timed out");}),
+      ]);
       socket.addEventListener("message",(event)=>{
         const reply=JSON.parse(event.data), waiter=pending.get(reply.id);
         if (waiter) {pending.delete(reply.id); reply.error?waiter.reject(new Error(JSON.stringify(reply.error))):waiter.resolve(reply.result);}
@@ -31,7 +36,11 @@ async function launch(profile) {
 }
 function command(method,params={}) {
   const id=++sequence;
-  return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{pending.delete(id);reject(new Error(`CDP ${method} timed out`));},10000);
+    pending.set(id,{resolve:(result)=>{clearTimeout(timer);resolve(result);},reject:(error)=>{clearTimeout(timer);reject(error);}});
+    socket.send(JSON.stringify({id,method,params}));
+  });
 }
 async function evaluate(expression) {
   const result=await command("Runtime.evaluate",{expression,awaitPromise:true,returnByValue:true});
@@ -39,6 +48,7 @@ async function evaluate(expression) {
   return result.result.value;
 }
 async function saveThroughUI(title) {
+  console.log("Saving through the UI",title);
   await evaluate(`document.querySelector(".category-card")?.click()`);
   await delay(150);
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes("Add item"))?.click()`);
@@ -58,14 +68,15 @@ async function saveThroughUI(title) {
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes("Save to library"))?.click()`);
   for (let i=0;i<30;i++) {
     const saved=await evaluate(`JSON.parse(localStorage.getItem("everia.items.v1") || "[]").some(x=>x.title===${JSON.stringify(title)})`);
-    if (saved) return;
+    if (saved) { console.log("Save acknowledged",title); return; }
     await delay(100);
   }
   throw new Error("Actual Everia save callback did not acknowledge the item");
 }
 async function close(mode) {
+  console.log("Closing",mode);
   if (mode === "renderer-crash") {
-    try { await command("Page.crash"); } catch {}
+    try { await Promise.race([command("Page.crash"),delay(3000)]); } catch {}
     await delay(100);
   }
   if (socket) {try {socket.close();} catch {} socket=undefined;}
