@@ -174,6 +174,9 @@ const read = `(async () => {
         assert.deepEqual(restart.cover, result.cover);
         assert.deepEqual(restart.wallpaper, result.wallpaper);
         await stop();
+        fs.rmSync(directory, { recursive: true, force: true });
+        assert(!fs.existsSync(directory), "original portable application was not removed");
+        console.log("original application folder removed before subsequent path tests");
         console.log("profile location", profile, "exists", fs.existsSync(profile));
         const credentials = fs.readFileSync(path.join(profile,"provider-credentials.v1.json"),"utf8");
         assert(!credentials.includes("fixture-secret"), "Plaintext credential leaked");
