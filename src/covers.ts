@@ -57,6 +57,60 @@ async function getAsset(store: "covers" | "wallpapers", id: string) {
   }
 }
 
+export type StoredAsset = {
+  store: "covers" | "wallpapers";
+  id: string;
+  blob: Blob;
+};
+
+/** Read both stores in one transaction; orphaned local images are user data too. */
+export async function exportAssets(): Promise<StoredAsset[]> {
+  const db = await open();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(["covers", "wallpapers"], "readonly");
+      const assets: StoredAsset[] = [];
+      for (const store of ["covers", "wallpapers"] as const) {
+        const request = transaction.objectStore(store).openCursor();
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) return;
+          if (typeof cursor.key !== "string" || !(cursor.value instanceof Blob)) {
+            transaction.abort();
+            return;
+          }
+          assets.push({ store, id: cursor.key, blob: cursor.value });
+          cursor.continue();
+        };
+      }
+      transaction.oncomplete = () => resolve(assets);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("Invalid stored image."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Replace the image stores atomically, including removal of stale/orphaned assets. */
+export async function replaceAssets(assets: StoredAsset[]): Promise<void> {
+  const db = await open();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(["covers", "wallpapers"], "readwrite");
+      for (const store of ["covers", "wallpapers"] as const)
+        transaction.objectStore(store).clear();
+      for (const asset of assets)
+        transaction.objectStore(asset.store).put(asset.blob, asset.id);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export async function storeCover(input: File | string): Promise<string> {
   let blob: Blob;
   if (typeof input === "string") {

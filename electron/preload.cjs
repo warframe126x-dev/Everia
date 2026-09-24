@@ -31,3 +31,15 @@ contextBridge.exposeInMainWorld("everiaWindow", {
     };
   },
 });
+
+contextBridge.exposeInMainWorld("everiaBackup", {
+  config: () => ipcRenderer.invoke("backup:config"),
+  isDue: () => ipcRenderer.invoke("backup:due"),
+  write: (file) => ipcRenderer.invoke("backup:write", file),
+  chooseDestination: () => ipcRenderer.invoke("backup:choose-destination"),
+  setEnabled: (enabled) => ipcRenderer.invoke("backup:set-enabled", enabled),
+  selectBackup: () => ipcRenderer.invoke("backup:select"),
+  beginRestore: (snapshot) => ipcRenderer.invoke("backup:begin-restore", snapshot),
+  pendingRestore: () => ipcRenderer.invoke("backup:pending"),
+  finishRestore: () => ipcRenderer.invoke("backup:finish-restore"),
+});

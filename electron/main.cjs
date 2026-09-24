@@ -5,8 +5,11 @@ const {
   safeStorage,
   screen,
   shell,
+  dialog,
 } = require("electron");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { createBackupStore } = require("./backup-store.cjs");
 const providers = require("./providers.cjs");
 const { createCredentialStore } = require("./credential-store.cjs");
 const {
@@ -191,8 +194,39 @@ ipcMain.handle(
 );
 
 let credentialStore;
+let backupStore;
+
+function backupHandler(action) {
+  return async (event, input) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed() ||
+        event.sender.getURL() !== pathToFileURL(path.join(__dirname, "..", "dist", "index.html")).href)
+      throw new Error("Invalid backup caller.");
+    return action(window, input);
+  };
+}
+ipcMain.handle("backup:config", backupHandler(() => backupStore.config()));
+ipcMain.handle("backup:due", backupHandler(() => backupStore.isDue()));
+ipcMain.handle("backup:write", backupHandler((_window, file) => backupStore.write(file)));
+ipcMain.handle("backup:pending", backupHandler(() => backupStore.pendingRestore()));
+ipcMain.handle("backup:begin-restore", backupHandler((_window, data) => backupStore.beginRestore(data)));
+ipcMain.handle("backup:finish-restore", backupHandler(() => backupStore.finishRestore()));
+ipcMain.handle("backup:choose-destination", backupHandler(async (window) => {
+  const selected = await dialog.showOpenDialog(window, { properties: ["openDirectory", "createDirectory"] });
+  return selected.canceled ? null : backupStore.setConfig({ destination: selected.filePaths[0] });
+}));
+ipcMain.handle("backup:set-enabled", backupHandler((_window, enabled) => backupStore.setConfig({ enabled })));
+ipcMain.handle("backup:select", backupHandler(async (window) => {
+  const selected = await dialog.showOpenDialog(window, {
+    properties: ["openFile"], filters: [{ name: "Everia Backup", extensions: ["everiabackup"] }],
+  });
+  return selected.canceled ? null : backupStore.read(selected.filePaths[0]);
+}));
 
 app.whenReady().then(() => {
+  backupStore = createBackupStore(
+    app.getPath("userData"), path.join(app.getPath("documents"), "Everia Backups"),
+  );
   windowStatePath = path.join(app.getPath("userData"), "window-state.v1.json");
   credentialStore = createCredentialStore({
     safeStorage,

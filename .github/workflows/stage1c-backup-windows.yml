@@ -1,0 +1,62 @@
+name: Everia v1.0 Stage 1C backup and durability validation
+
+on:
+  push:
+    branches: [v1.0]
+    paths:
+      - 'electron/backup*'
+      - 'electron/main.cjs'
+      - 'electron/preload.cjs'
+      - 'src/backup*'
+      - 'src/covers.ts'
+      - 'src/main.tsx'
+      - 'src/vite-env.d.ts'
+      - 'scripts/persistence-durability-probe.cjs'
+      - '.github/workflows/stage1c-backup-windows.yml'
+      - 'package.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-stage1c:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          architecture: x64
+          cache: npm
+      - name: Verify v0.9 baseline lineage
+        shell: pwsh
+        run: |
+          $baseline = "fd98cfa3f79c10cebcf757f22a52e98d0f547e93"
+          if ((git rev-parse "$baseline^{commit}").Trim() -ne $baseline) { throw "Missing stable baseline" }
+          git merge-base --is-ancestor $baseline HEAD
+          if ($LASTEXITCODE -ne 0) { throw "v1.0 does not descend from v0.9" }
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:ui
+      - run: npm run build
+      - name: Package Windows x64 portable app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $args = @(
+            "--no-install", "electron-packager", ".", "Everia", "--platform=win32", "--arch=x64",
+            "--app-version=0.9.0", "--icon=public/assets/branding/everia-windows-icon.ico",
+            "--out=release", "--overwrite", "--asar", "--prune=true",
+            "--ignore=^/(src|upload|release|node_modules/.cache)(/|$)",
+            "--ignore=\.(zip|tsbuildinfo)$", "--ignore=^/.*\.(spec\.tsx|spec\.ts|test\.ts|test\.cjs)$"
+          )
+          & npx @args
+          if ($LASTEXITCODE -ne 0) { throw "Packaging failed" }
+      - name: Prove actual-save durability on normal close and observe abrupt termination
+        run: node scripts/persistence-durability-probe.cjs
+      - name: Preserve corrected cross-path profile regression gate
+        run: node scripts/storage-origin-probe.cjs

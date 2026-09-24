@@ -10,7 +10,19 @@ import type {
 } from "./providers/types";
 
 declare global {
+  const __APP_VERSION__: string;
   interface Window {
+    everiaBackup?: {
+      config(): Promise<{ version: number; enabled: boolean; destination: string; destinationSelected: boolean; lastSuccess: string | null; lastFailure: { at: string; message: string } | null }>;
+      isDue(): Promise<boolean>;
+      write(file: string): Promise<string>;
+      chooseDestination(): Promise<{ destination: string } | null>;
+      setEnabled(enabled: boolean): Promise<unknown>;
+      selectBackup(): Promise<string | null>;
+      beginRestore(snapshot: { backup: string; raw: (string | null)[] }): Promise<void>;
+      pendingRestore(): Promise<{ backup: string; raw: (string | null)[] } | null>;
+      finishRestore(): Promise<void>;
+    };
     everiaWindow?: {
       onResponsiveScale(
         callback: (value: {
