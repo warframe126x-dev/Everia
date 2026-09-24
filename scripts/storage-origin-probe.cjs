@@ -60,7 +60,8 @@ async function evaluate(expression) {
   return response.result.value;
 }
 async function launch(label, directory) {
-  fs.cpSync(packageDir, directory, { recursive: true });
+  if (!fs.existsSync(path.join(directory, "Everia.exe")))
+    fs.cpSync(packageDir, directory, { recursive: true });
   active = spawn(path.join(directory, "Everia.exe"), [`--remote-debugging-port=${port}`], {
     env: { ...process.env }, stdio: "ignore",
   });
@@ -68,7 +69,11 @@ async function launch(label, directory) {
   console.log(JSON.stringify({ path: label, url, pid: active.pid }));
 }
 async function stop() {
-  socket?.close();
+  if (socket) {
+    try { await evaluate("window.close()"); } catch {}
+    await delay(700);
+    socket.close();
+  }
   socket = undefined;
   for (const [, waiter] of pending) waiter.reject(new Error("Window closed"));
   pending.clear();
@@ -162,6 +167,11 @@ const read = `(async () => {
       console.log("observation", JSON.stringify(observations.at(-1)));
       await stop();
       if (i === 0) {
+        await launch("original-restart", directory);
+        await delay(300);
+        const restart = await evaluate(read);
+        console.log("original restart", JSON.stringify(restart));
+        await stop();
         const recovery = spawnSync(require("electron"), [
           path.resolve("scripts/legacy-origin-recovery-probe.cjs"), legacyUrl
         ], { encoding: "utf8", timeout: 20000 });
