@@ -214,7 +214,9 @@ export async function restoreSelectedBackup(): Promise<boolean> {
 }
 export async function scheduleAutomaticBackup(): Promise<void> {
   const api = window.everiaBackup;
-  if (!api || !(await api.isDue())) return;
-  try { await backUpNow(); }
+  if (!api) return;
+  try {
+    if (await api.isDue()) await backUpNow();
+  }
   catch (error) { console.error("Automatic backup failed:", error); }
 }

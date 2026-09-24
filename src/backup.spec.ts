@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, test, vi } from "vitest";
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
 import { Blob as NodeBlob } from "node:buffer";
-import { createBackup, parseBackup, restoreBackup, recoverPendingRestore } from "./backup";
+import { createBackup, parseBackup, restoreBackup, recoverPendingRestore, scheduleAutomaticBackup } from "./backup";
 import { exportAssets, replaceAssets } from "./covers";
 
 const item = (id: string, category = "games") => ({
@@ -69,6 +69,12 @@ test("a reasonable large multi-category library round-trips deterministically", 
   const second = await createBackup("1.0.0","2026-09-24T10:00:00.000Z");
   expect(first).toBe(second);
   expect((await parseBackup(first)).data.items).toHaveLength(1000);
+});
+test("unreadable backup configuration does not reject startup scheduling", async () => {
+  window.everiaBackup!.isDue = async () => { throw Error("damaged config retained"); };
+  const logged = vi.spyOn(console,"error").mockImplementation(()=>{});
+  await expect(scheduleAutomaticBackup()).resolves.toBeUndefined();
+  expect(logged).toHaveBeenCalledWith("Automatic backup failed:",expect.any(Error));
 });
 test("empty library and unsupported, malformed, truncated or tampered backups", async () => {
   expect((await parseBackup(await createBackup("1.0.0"))).data.items).toEqual([]);
