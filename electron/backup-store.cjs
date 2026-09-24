@@ -46,7 +46,7 @@ function writeAtomic(file, contents) {
   const temp = `${file}.${crypto.randomUUID()}.tmp`;
   try {
     fs.writeFileSync(temp, contents, { flag: "wx", mode: 0o600 });
-    const descriptor = fs.openSync(temp, "r");
+    const descriptor = fs.openSync(temp, "r+");
     try { fs.fsyncSync(descriptor); } finally { fs.closeSync(descriptor); }
     fs.renameSync(temp, file);
   } finally { try { fs.unlinkSync(temp); } catch {} }
@@ -127,7 +127,7 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
     const stage = `${final}.staging`;
     try {
       fs.writeFileSync(stage, file, { flag: "wx", mode: 0o600 });
-      const fd = fs.openSync(stage, "r");
+      const fd = fs.openSync(stage, "r+");
       try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
       verify(readBounded(stage));
       fs.renameSync(stage, final);

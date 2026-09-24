@@ -33,7 +33,7 @@ beforeEach(async () => {
     finishRestore: async () => { if (failFinish) { failFinish = false; throw Error("injected finish failure"); } pending = null; },
   };
 });
-afterEach(() => { vi.unstubAllGlobals(); delete window.everiaBackup; });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delete window.everiaBackup; });
 async function populate() {
   localStorage.setItem("everia.items.v1", JSON.stringify([item("one"),item("two","manga")]));
   localStorage.setItem("everia.theme.v1",JSON.stringify(theme));
@@ -78,6 +78,12 @@ test("missing referenced image cannot export or restore", async () => {
   await expect(createBackup("1.0.0")).rejects.toThrow(/missing cover/);
   const doc = JSON.parse(good);
   doc.data.items[0].coverUrl = "local-cover:lost";
+  const digest = await webcrypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify({data:doc.data,assets:doc.assets})));
+  doc.manifest.payloadSha256 = Buffer.from(digest).toString("hex");
+  await expect(parseBackup(JSON.stringify(doc))).rejects.toThrow(/missing cover/);
+  doc.data.items[0].rating = 99;
+  const malformedDigest = await webcrypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify({data:doc.data,assets:doc.assets})));
+  doc.manifest.payloadSha256 = Buffer.from(malformedDigest).toString("hex");
   await expect(parseBackup(JSON.stringify(doc))).rejects.toThrow();
 });
 test("restore over populated library verifies read-back and keeps credentials outside transaction", async () => {
@@ -104,4 +110,29 @@ test("failed commit rolls back raw storage and assets; interrupted journal recov
   localStorage.removeItem("everia.items.v1");
   await recoverPendingRestore();
   expect(localStorage.getItem("everia.items.v1")).toBe(original);
+});
+test("localStorage commit failure and read-back mismatch both roll back", async () => {
+  await populate();
+  const incoming = await createBackup("1.0.0");
+  localStorage.setItem("everia.items.v1",JSON.stringify([{id:"before",title:"Before",category:"anime",status:"Planning",favorite:false,dateAdded:"2020-01-01"}]));
+  const original = localStorage.getItem("everia.items.v1");
+  const native = Storage.prototype.setItem;
+  let failed = false;
+  vi.spyOn(Storage.prototype,"setItem").mockImplementation(function(key,value) {
+    if (key === "everia.theme.v1" && !failed) { failed = true; throw Error("injected write failure"); }
+    return native.call(this,key,value);
+  });
+  await expect(restoreBackup(incoming)).rejects.toThrow(/injected write/);
+  expect(localStorage.getItem("everia.items.v1")).toBe(original);
+  expect(pending).toBeNull();
+  vi.restoreAllMocks();
+  let tampered = false;
+  vi.spyOn(Storage.prototype,"setItem").mockImplementation(function(key,value) {
+    if (key === "everia.views.v1" && !tampered) { tampered = true; return native.call(this,key,'{"games":"list"}'); }
+    return native.call(this,key,value);
+  });
+  await expect(restoreBackup(incoming)).rejects.toThrow(/read-back mismatch/);
+  expect(localStorage.getItem("everia.items.v1")).toBe(original);
+  expect(pending).toBeNull();
+  vi.restoreAllMocks();
 });
