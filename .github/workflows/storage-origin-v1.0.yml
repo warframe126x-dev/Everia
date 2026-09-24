@@ -1,0 +1,30 @@
+name: Everia v1.0 Stage 1 storage-origin probe
+
+on:
+  push:
+    branches:
+      - v1.0
+    paths:
+      - scripts/storage-origin-probe.cjs
+      - .github/workflows/storage-origin-v1.0.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-origin:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          architecture: x64
+          cache: npm
+      - name: Install and build the exact v0.9 app
+        run: npm ci
+      - run: npm run package:win
+      - name: Launch from four paths against one v0.9 profile
+        run: node scripts/storage-origin-probe.cjs
