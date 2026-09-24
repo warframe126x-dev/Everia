@@ -6,6 +6,7 @@ on:
       - v1.0
     paths:
       - scripts/storage-origin-probe.cjs
+      - scripts/profile-verification.cjs
       - .github/workflows/storage-origin-v1.0.yml
   workflow_dispatch:
 
@@ -25,6 +26,10 @@ jobs:
           cache: npm
       - name: Install and build the exact v0.9 app
         run: npm ci
+      - name: Preserve v0.9 backend and provider gates
+        run: npm test
+      - name: Preserve v0.9 UI gates
+        run: npm run test:ui
       - run: npm run build
       - name: Package using the proven PowerShell invocation
         shell: pwsh
