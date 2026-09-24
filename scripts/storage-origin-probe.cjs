@@ -59,6 +59,13 @@ async function evaluate(expression) {
   if (response.exceptionDetails) throw new Error(JSON.stringify(response.exceptionDetails));
   return response.result.value;
 }
+async function waitForUI(expression) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (await evaluate(expression)) return;
+    await delay(100);
+  }
+  throw new Error(`Packaged Everia did not render expected UI: ${expression}`);
+}
 async function launch(label, directory) {
   if (!fs.existsSync(path.join(directory, "Everia.exe")))
     fs.cpSync(packageDir, directory, { recursive: true });
@@ -151,9 +158,9 @@ const read = `(async () => {
         await delay(1000);
       }
       await command("Page.reload");
-      await delay(1200);
+      await waitForUI(`!!document.querySelector(".category-card")`);
       await evaluate(`document.querySelector(".category-card")?.click()`);
-      await delay(200);
+      await waitForUI(`document.body.innerText.includes("Origin Game")`);
       const result = await evaluate(read);
       observations.push({ label, ...result });
       await stop();
