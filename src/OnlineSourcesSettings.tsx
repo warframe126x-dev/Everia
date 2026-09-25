@@ -1,21 +1,43 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { ProviderConfiguration } from "./providers/types";
+import type {
+  ProviderConfiguration,
+  ProviderResponse,
+} from "./providers/types";
 import type { ProviderId } from "./types";
+import { useLocalization } from "./localization/Localization";
+import type { StringKey } from "./localization/format";
 
-const categoryCopy: Record<ProviderId, string> = {
-  igdb: "Games",
-  rawg: "Games",
-  tmdb: "Movies & TV Shows",
-  omdb: "Movies & TV Shows",
-  ranobedb: "Light Novels",
-  tenrai: "Anime & Manga",
-  jikan: "Anime & Manga",
+const categoryKeys: Record<ProviderId, StringKey> = {
+  igdb: "providers.games",
+  rawg: "providers.games",
+  tmdb: "providers.moviesTv",
+  omdb: "providers.moviesTv",
+  ranobedb: "providers.lightNovels",
+  tenrai: "providers.animeManga",
+  jikan: "providers.animeManga",
 };
+type Action = "save" | "test" | "remove";
+type Notice = { key: StringKey; provider?: string };
+const failureKeys: Record<string, StringKey> = {
+  "credential-unreadable": "providers.credentialUnreadable",
+  "protection-unavailable": "providers.protectionUnavailable",
+  "credential-required": "providers.credentialRequired",
+  "not-configured": "providers.notConfiguredHelp",
+  "connection-failed": "providers.connectionFailedHelp",
+  credentials: "providers.credentialsRejected",
+  timeout: "providers.timeout",
+  "rate-limit": "providers.rateLimit",
+  network: "providers.network",
+};
+const failureKey = (code?: string): StringKey =>
+  (code && failureKeys[code]) || "providers.operationFailed";
 
 export function OnlineSourcesSettings() {
+  const { t } = useLocalization();
   const [providers, setProviders] = useState<ProviderConfiguration[]>([]);
   const [busy, setBusy] = useState<ProviderId>();
-  const [message, setMessage] = useState("");
+  const [busyAction, setBusyAction] = useState<Action>();
+  const [message, setMessage] = useState<Notice>();
   const igdbClientId = useRef<HTMLInputElement>(null);
   const igdbSecret = useRef<HTMLInputElement>(null);
   const tmdbToken = useRef<HTMLInputElement>(null);
@@ -24,85 +46,116 @@ export function OnlineSourcesSettings() {
 
   const refresh = async () => {
     if (!window.everiaProviders?.configuration) {
-      setMessage(
-        "Online source configuration is available in the Everia desktop app.",
-      );
+      setMessage({ key: "providers.desktopOnly" });
       return;
     }
-    const response = await window.everiaProviders.configuration();
-    if (response.ok && response.data) setProviders(response.data);
-    else
-      setMessage(response.error ?? "Online source status could not be loaded.");
+    try {
+      const response = await window.everiaProviders.configuration();
+      if (response.ok && response.data) setProviders(response.data);
+      else setMessage({ key: failureKey(response.errorCode) });
+    } catch {
+      setMessage({ key: "providers.operationFailed" });
+    }
   };
-
   useEffect(() => {
     void refresh();
   }, []);
 
   const perform = async (
     provider: ProviderId,
-    action: () => Promise<{ ok: boolean; error?: string }>,
+    action: Action,
+    operation: () => Promise<ProviderResponse<unknown>>,
   ) => {
     setBusy(provider);
-    setMessage("");
-    const response = await action();
+    setBusyAction(action);
+    setMessage(undefined);
     const providerName =
       providers.find((item) => item.id === provider)?.name ?? provider;
-    setMessage(
-      response.ok
-        ? `${providerName} is connected.`
-        : (response.error ?? "Connection failed."),
-    );
-    await refresh();
-    setBusy(undefined);
+    try {
+      const response = await operation();
+      setMessage({
+        key: response.ok
+          ? action === "remove"
+            ? "providers.removed"
+            : "providers.connected"
+          : failureKey(response.errorCode),
+        provider: providerName,
+      });
+      await refresh();
+    } catch {
+      setMessage({ key: "providers.operationFailed", provider: providerName });
+    } finally {
+      setBusy(undefined);
+      setBusyAction(undefined);
+    }
   };
 
   const saveIgdb = () =>
-    perform("igdb", async () => {
-      const response = await window.everiaProviders!.saveCredentials({
-        provider: "igdb",
-        credentials: {
-          clientId: igdbClientId.current?.value,
-          clientSecret: igdbSecret.current?.value,
-        },
-      });
-      if (igdbSecret.current) igdbSecret.current.value = "";
-      return response;
+    perform("igdb", "save", async () => {
+      try {
+        return await window.everiaProviders!.saveCredentials({
+          provider: "igdb",
+          credentials: {
+            clientId: igdbClientId.current?.value,
+            clientSecret: igdbSecret.current?.value,
+          },
+        });
+      } finally {
+        if (igdbSecret.current) igdbSecret.current.value = "";
+      }
     });
-
   const saveTmdb = () =>
-    perform("tmdb", async () => {
-      const response = await window.everiaProviders!.saveCredentials({
-        provider: "tmdb",
-        credentials: { token: tmdbToken.current?.value },
-      });
-      if (tmdbToken.current) tmdbToken.current.value = "";
-      return response;
+    perform("tmdb", "save", async () => {
+      try {
+        return await window.everiaProviders!.saveCredentials({
+          provider: "tmdb",
+          credentials: { token: tmdbToken.current?.value },
+        });
+      } finally {
+        if (tmdbToken.current) tmdbToken.current.value = "";
+      }
     });
-
   const saveKey = (
     provider: "rawg" | "omdb",
     input: RefObject<HTMLInputElement | null>,
   ) =>
-    perform(provider, async () => {
-      const response = await window.everiaProviders!.saveCredentials({
-        provider,
-        credentials: { token: input.current?.value },
-      });
-      if (input.current) input.current.value = "";
-      return response;
+    perform(provider, "save", async () => {
+      try {
+        return await window.everiaProviders!.saveCredentials({
+          provider,
+          credentials: { token: input.current?.value },
+        });
+      } finally {
+        if (input.current) input.current.value = "";
+      }
     });
 
   const stateLabel = (provider: ProviderConfiguration) =>
     provider.state === "connected"
-      ? "Connected"
+      ? t("providers.stateConnected")
       : provider.state === "connection-failed"
-        ? "Connection failed"
+        ? t("providers.stateFailed")
         : provider.state === "unchecked"
-          ? provider.requiresCredentials
-            ? "Not checked"
-            : "Available"
-          : "Not configured";
+          ? t(
+              provider.requiresCredentials
+                ? "providers.stateUnchecked"
+                : "providers.stateAvailable",
+            )
+          : t("providers.stateNotConfigured");
+  const actionLabel = (
+    provider: ProviderId,
+    action: Action,
+    idle: StringKey,
+  ) =>
+    busy === provider && busyAction === action
+      ? t(
+          action === "test"
+            ? "providers.testing"
+            : action === "remove"
+              ? "providers.removing"
+              : "providers.saving",
+        )
+      : t(idle);
 
   return (
     <div className="provider-settings-grid">
@@ -113,36 +166,46 @@ export function OnlineSourcesSettings() {
               <div className="provider-name-row">
                 <h3>{provider.name}</h3>
                 <span className={`provider-role ${provider.role}`}>
-                  {provider.role}
+                  {t(
+                    provider.role === "primary"
+                      ? "providers.primary"
+                      : "providers.backup",
+                  )}
                 </span>
               </div>
-              <p>{categoryCopy[provider.id]}</p>
+              <p>{t(categoryKeys[provider.id])}</p>
             </div>
             <span className={`connection-state ${provider.state}`}>
               {stateLabel(provider)}
             </span>
           </div>
-
+          {provider.reasonCode && provider.reasonCode !== "not-configured" && (
+            <p className="no-configuration">
+              {t(failureKey(provider.reasonCode), { provider: provider.name })}
+            </p>
+          )}
           {provider.id === "igdb" && (
             <div className="provider-fields">
               <label>
-                Client ID
+                {t("providers.clientId")}
                 <input
                   ref={igdbClientId}
                   defaultValue=""
-                  placeholder={provider.clientIdHint || "Twitch Client ID"}
+                  placeholder={
+                    provider.clientIdHint || t("providers.twitchClientId")
+                  }
                   autoComplete="off"
                 />
               </label>
               <label>
-                Client Secret
+                {t("providers.clientSecret")}
                 <input
                   ref={igdbSecret}
                   type="password"
                   placeholder={
                     provider.configured
-                      ? "Saved securely"
-                      : "Twitch Client Secret"
+                      ? t("providers.savedSecurely")
+                      : t("providers.twitchSecret")
                   }
                   autoComplete="new-password"
                 />
@@ -152,14 +215,14 @@ export function OnlineSourcesSettings() {
           {provider.id === "tmdb" && (
             <div className="provider-fields one-field">
               <label>
-                API Read Access Token
+                {t("providers.readToken")}
                 <input
                   ref={tmdbToken}
                   type="password"
                   placeholder={
                     provider.configured
-                      ? "Saved securely"
-                      : "TMDB Read Access Token"
+                      ? t("providers.savedSecurely")
+                      : t("providers.tmdbToken")
                   }
                   autoComplete="new-password"
                 />
@@ -169,14 +232,16 @@ export function OnlineSourcesSettings() {
           {(provider.id === "rawg" || provider.id === "omdb") && (
             <div className="provider-fields one-field">
               <label>
-                API Key
+                {t("providers.apiKey")}
                 <input
                   ref={provider.id === "rawg" ? rawgKey : omdbKey}
                   type="password"
                   placeholder={
                     provider.configured
-                      ? "Saved securely"
-                      : `${provider.name} API Key`
+                      ? t("providers.savedSecurely")
+                      : t("providers.providerApiKey", {
+                          provider: provider.name,
+                        })
                   }
                   autoComplete="new-password"
                 />
@@ -184,9 +249,8 @@ export function OnlineSourcesSettings() {
             </div>
           )}
           {!provider.requiresCredentials && (
-            <p className="no-configuration">No configuration required</p>
+            <p className="no-configuration">{t("providers.noConfiguration")}</p>
           )}
-
           <div className="provider-actions">
             {provider.id === "igdb" && (
               <button
@@ -194,7 +258,7 @@ export function OnlineSourcesSettings() {
                 disabled={busy === provider.id}
                 onClick={() => void saveIgdb()}
               >
-                Save / Connect
+                {actionLabel(provider.id, "save", "providers.saveConnect")}
               </button>
             )}
             {provider.id === "tmdb" && (
@@ -203,7 +267,7 @@ export function OnlineSourcesSettings() {
                 disabled={busy === provider.id}
                 onClick={() => void saveTmdb()}
               >
-                Save / Connect
+                {actionLabel(provider.id, "save", "providers.saveConnect")}
               </button>
             )}
             {provider.id === "rawg" && (
@@ -212,7 +276,7 @@ export function OnlineSourcesSettings() {
                 disabled={busy === provider.id}
                 onClick={() => void saveKey("rawg", rawgKey)}
               >
-                Save / Connect
+                {actionLabel(provider.id, "save", "providers.saveConnect")}
               </button>
             )}
             {provider.id === "omdb" && (
@@ -221,33 +285,37 @@ export function OnlineSourcesSettings() {
                 disabled={busy === provider.id}
                 onClick={() => void saveKey("omdb", omdbKey)}
               >
-                Save / Connect
+                {actionLabel(provider.id, "save", "providers.saveConnect")}
               </button>
             )}
             <button
               className="secondary"
               disabled={busy === provider.id}
               onClick={() =>
-                void perform(provider.id, () =>
+                void perform(provider.id, "test", () =>
                   window.everiaProviders!.testConnection(provider.id),
                 )
               }
             >
-              Test Connection
+              {actionLabel(provider.id, "test", "providers.testConnection")}
             </button>
             {provider.requiresCredentials && (
               <button
                 className="quiet-danger"
                 disabled={!provider.configured || busy === provider.id}
                 onClick={() =>
-                  void perform(provider.id, () =>
+                  void perform(provider.id, "remove", () =>
                     window.everiaProviders!.removeCredentials(
                       provider.id as "igdb" | "rawg" | "tmdb" | "omdb",
                     ),
                   )
                 }
               >
-                Remove {provider.id === "igdb" ? "Credentials" : "Credential"}
+                {actionLabel(
+                  provider.id,
+                  "remove",
+                  "providers.removeCredentials",
+                )}
               </button>
             )}
           </div>
@@ -255,7 +323,7 @@ export function OnlineSourcesSettings() {
       ))}
       {message && (
         <p className="provider-message" role="status">
-          {message}
+          {t(message.key, { provider: message.provider ?? "" })}
         </p>
       )}
     </div>

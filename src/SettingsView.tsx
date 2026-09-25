@@ -2,13 +2,11 @@ import { Image, Library, Palette, Plug } from "lucide-react";
 import { defaultTheme } from "./data";
 import { storeWallpaper } from "./covers";
 import { useState } from "react";
-import {
-  type BackgroundFit,
-  type BackgroundMode,
-  type ThemeSettings,
-} from "./types";
+import { type BackgroundFit, type ThemeSettings } from "./types";
 import { OnlineSourcesSettings } from "./OnlineSourcesSettings";
 import { assetUrl } from "./assetPaths";
+import { useLocalization } from "./localization/Localization";
+import { locales } from "./localization/locale";
 
 export function SettingsView({
   theme,
@@ -17,21 +15,19 @@ export function SettingsView({
   theme: ThemeSettings;
   setTheme: (theme: ThemeSettings) => void;
 }) {
-  const [error, setError] = useState("");
+  const { locale, setLocale, t } = useLocalization();
+  const [error, setError] = useState(false);
+  const [localeError, setLocaleError] = useState(false);
   const [busy, setBusy] = useState(false);
   const chooseWallpaper = async (file?: File) => {
     if (!file) return;
     setBusy(true);
-    setError("");
+    setError(false);
     try {
       const customWallpaperId = await storeWallpaper(file);
       setTheme({ ...theme, backgroundMode: "custom", customWallpaperId });
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "The wallpaper could not be stored.",
-      );
+    } catch {
+      setError(true);
     } finally {
       setBusy(false);
     }
@@ -40,9 +36,9 @@ export function SettingsView({
     <div className="page settings-page">
       <div className="page-title">
         <div>
-          <p className="kicker">PERSONALIZE</p>
-          <h1>Settings</h1>
-          <p>Shape Everia into a universe that feels like yours.</p>
+          <p className="kicker">{t("settings.personalize")}</p>
+          <h1>{t("navigation.settings")}</h1>
+          <p>{t("settings.intro")}</p>
         </div>
       </div>
       <section className="settings-card">
@@ -50,22 +46,20 @@ export function SettingsView({
           <Palette />
         </div>
         <div className="settings-content">
-          <h2>Appearance</h2>
-          <p>
-            Keep Everia readable while choosing the colors that feel like yours.
-          </p>
+          <h2>{t("settings.appearance")}</h2>
+          <p>{t("settings.appearanceDescription")}</p>
           <div className="color-settings">
             {(
               [
-                ["Accent color", "accent"],
-                ["Background color", "background"],
-                ["Text color", "text"],
+                ["settings.accentColor", "accent"],
+                ["settings.backgroundColor", "background"],
+                ["settings.textColor", "text"],
               ] as const
             ).map(([label, key]) => (
               <label key={key}>
-                {label}
+                {t(label)}
                 <input
-                  aria-label={label}
+                  aria-label={t(label)}
                   type="color"
                   value={theme[key]}
                   onChange={(e) =>
@@ -87,8 +81,33 @@ export function SettingsView({
               })
             }
           >
-            Restore default colors
+            {t("settings.restoreColors")}
           </button>
+          <label className="locale-setting">
+            {t("settings.language")}
+            <select
+              value={locale}
+              onChange={(event) => {
+                try {
+                  setLocale(event.target.value as typeof locale);
+                  setLocaleError(false);
+                } catch {
+                  setLocaleError(true);
+                }
+              }}
+            >
+              {locales.map((value) => (
+                <option key={value} value={value}>
+                  {value === "en"
+                    ? "English"
+                    : value === "fr"
+                      ? "Français"
+                      : "العربية"}
+                </option>
+              ))}
+            </select>
+          </label>
+          {localeError && <p role="alert">{t("errors.localeSave")}</p>}
         </div>
       </section>
       <section className="settings-card">
@@ -96,27 +115,16 @@ export function SettingsView({
           <Image />
         </div>
         <div className="settings-content">
-          <h2>Background</h2>
-          <p>
-            Use Everia’s approved wallpaper, a solid color, or a personal image
-            copied into local storage.
-          </p>
-          {error && <p role="alert">{error}</p>}
+          <h2>{t("settings.background")}</h2>
+          <p>{t("settings.backgroundDescription")}</p>
+          {error && <p role="alert">{t("settings.wallpaperError")}</p>}
           <div className="background-modes">
             {(
               [
-                ["default", "Everia Default", "The built-in Everia universe."],
-                [
-                  "solid",
-                  "Solid Color",
-                  "Uses your selected background color.",
-                ],
-                [
-                  "custom",
-                  "Custom Image",
-                  "Uses a locally stored personal image.",
-                ],
-              ] as [BackgroundMode, string, string][]
+                ["default", "settings.defaultMode", "settings.defaultHelp"],
+                ["solid", "settings.solidMode", "settings.solidHelp"],
+                ["custom", "settings.customMode", "settings.customHelp"],
+              ] as const
             ).map(([mode, label, help]) => (
               <button
                 key={mode}
@@ -124,15 +132,15 @@ export function SettingsView({
                 onClick={() => setTheme({ ...theme, backgroundMode: mode })}
                 disabled={mode === "custom" && !theme.customWallpaperId}
               >
-                <strong>{label}</strong>
-                <span>{help}</span>
+                <strong>{t(label)}</strong>
+                <span>{t(help)}</span>
               </button>
             ))}
           </div>
           <label className="wallpaper-picker">
-            Custom image
+            {t("settings.customImage")}
             <input
-              aria-label="Choose custom wallpaper"
+              aria-label={t("settings.chooseWallpaper")}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
               disabled={busy}
@@ -140,15 +148,15 @@ export function SettingsView({
             />
             <small>
               {busy
-                ? "Copying into Everia…"
+                ? t("settings.copying")
                 : theme.customWallpaperId
-                  ? "A local copy is ready."
-                  : "PNG, JPEG, WebP or GIF up to 30 MB."}
+                  ? t("settings.localCopyReady")
+                  : t("settings.imageLimits")}
             </small>
           </label>
           <div className="background-controls">
             <label>
-              Image fit
+              {t("settings.imageFit")}
               <select
                 value={theme.imageFit}
                 onChange={(e) =>
@@ -158,15 +166,16 @@ export function SettingsView({
                   })
                 }
               >
-                <option value="cover">Cover</option>
-                <option value="contain">Contain</option>
-                <option value="stretch">Stretch</option>
+                <option value="cover">{t("settings.fitCover")}</option>
+                <option value="contain">{t("settings.fitContain")}</option>
+                <option value="stretch">{t("settings.fitStretch")}</option>
               </select>
             </label>
             <label>
-              Background dimming <strong>{theme.backgroundDimming}%</strong>
+              {t("settings.dimming")}{" "}
+              <strong>{theme.backgroundDimming}%</strong>
               <input
-                aria-label="Background dimming"
+                aria-label={t("settings.dimming")}
                 type="range"
                 min="0"
                 max="85"
@@ -184,7 +193,7 @@ export function SettingsView({
             className="secondary restore-appearance"
             onClick={() => setTheme(defaultTheme)}
           >
-            Restore appearance defaults
+            {t("settings.restoreAppearance")}
           </button>
         </div>
       </section>
@@ -193,11 +202,8 @@ export function SettingsView({
           <Plug />
         </div>
         <div className="settings-content">
-          <h2>Online Sources</h2>
-          <p>
-            Connect metadata providers for discovery and import. Saved entries
-            remain local and independent of every provider.
-          </p>
+          <h2>{t("settings.onlineSources")}</h2>
+          <p>{t("settings.onlineDescription")}</p>
           <OnlineSourcesSettings />
         </div>
       </section>
@@ -206,34 +212,23 @@ export function SettingsView({
           <Library />
         </div>
         <div className="settings-content">
-          <h2>Local-first library</h2>
-          <p>
-            Your entries, covers, personal information and custom wallpaper are
-            stored on this device. Online sources can help you discover items,
-            but losing a source will never remove what you already saved.
-          </p>
+          <h2>{t("settings.localLibrary")}</h2>
+          <p>{t("settings.localDescription")}</p>
           <div className="provider-credits">
-            <h3>Metadata credits</h3>
-            <p>
-              Provider attribution is kept here, separate from your personal
-              library. Everia supports IGDB, RAWG, TMDB, OMDb, RanobeDB, Tenrai
-              and Jikan adapters.
-            </p>
+            <h3>{t("settings.credits")}</h3>
+            <p>{t("settings.creditsDescription")}</p>
             <img
               className="tmdb-logo"
               src={assetUrl("assets/providers/tmdb-logo.svg")}
-              alt="The Movie Database (TMDB)"
+              alt={t("settings.tmdbAlt")}
             />
-            <p className="tmdb-notice">
-              This product uses the TMDB API but is not endorsed or certified by
-              TMDB.
-            </p>
+            <p className="tmdb-notice">{t("settings.tmdbNotice")}</p>
             <p>
-              RAWG metadata is provided by{" "}
+              {t("settings.rawgIntro")}{" "}
               <a href="https://rawg.io/" target="_blank" rel="noreferrer">
                 RAWG
               </a>
-              . OMDb data is licensed under{" "}
+              {t("settings.omdbIntro")}{" "}
               <a
                 href="https://creativecommons.org/licenses/by-nc/4.0/"
                 target="_blank"
@@ -241,9 +236,7 @@ export function SettingsView({
               >
                 CC BY-NC 4.0
               </a>
-              . Anime and manga metadata may include third-party content
-              surfaced through Tenrai or Jikan and remains subject to its
-              respective owners' rights.
+              {t("settings.animeRights")}
             </p>
           </div>
         </div>

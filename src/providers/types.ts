@@ -11,6 +11,7 @@ export interface ProviderAvailability {
   categories: Category[];
   available: boolean;
   reason?: string;
+  reasonCode?: string;
   role?: "primary" | "backup";
 }
 
@@ -45,6 +46,7 @@ export interface ProviderConfiguration {
   configured: boolean;
   state: ProviderConnectionState;
   reason?: string;
+  reasonCode?: string;
   clientIdHint?: string;
   role: "primary" | "backup";
 }

@@ -44,7 +44,7 @@ test("credential storage fails closed when OS encryption is unavailable", () => 
   });
   assert.throws(
     () => store.save("tmdb", { token: "token" }),
-    /Protected credential storage/,
+    (error) => error.code === "protection-unavailable" && /Protected credential storage/.test(error.message),
   );
 });
 
@@ -89,7 +89,7 @@ test("truncated credentials are preserved and cannot be silently replaced", () =
       decryptString: (value) => value.toString(),
     },
   });
-  assert.throws(() => store.status("tmdb"), /could not be read/);
+  assert.throws(() => store.status("tmdb"), (error) => error.code === "credential-unreadable");
   assert.throws(() => store.get("tmdb"), /could not be read/);
   assert.throws(() => store.save("tmdb", { token: "new secret" }), /could not be read/);
   assert.throws(() => store.remove("tmdb"), /could not be read/);

@@ -146,6 +146,13 @@ function providerStatus(id) {
           ? "connected"
           : "unchecked",
     clientIdHint: storedStatus?.clientIdHint,
+    reasonCode: credentialReadFailed
+      ? "credential-unreadable"
+      : !configured
+        ? storedStatus?.configured && !protectedStorageAvailable
+          ? "protection-unavailable"
+          : "not-configured"
+        : failed ? "connection-failed" : undefined,
     reason: credentialReadFailed
       ? "Saved provider credentials could not be read. The file has been preserved."
       : !configured
@@ -169,7 +176,7 @@ function validateRequest(provider, category) {
   const status = providerStatus(provider);
   if (!status.categories.includes(category))
     throw new Error(`${status.name} does not support this category.`);
-  if (!status.available) throw new Error(status.reason);
+  if (!status.available) throw new ProviderError(status.reason, status.reasonCode ?? "unavailable");
 }
 
 const delay = (milliseconds) =>
@@ -919,7 +926,7 @@ async function details({ provider, providerId, category }) {
 }
 async function testConnection(provider) {
   const status = providerStatus(provider);
-  if (!status.available) throw new Error(status.reason);
+  if (!status.available) throw new ProviderError(status.reason, status.reasonCode ?? "unavailable");
   try {
     if (provider === "igdb") await getIgdbToken();
     else if (provider === "rawg")

@@ -12,10 +12,13 @@ function verify(file) {
   try { parsed = JSON.parse(file); } catch { throw new Error("Backup is corrupt or truncated."); }
   const { manifest, data, assets } = parsed ?? {};
   if (!parsed || Object.keys(parsed).sort().join() !== "assets,data,manifest" ||
-      !manifest || manifest.format !== "EveriaBackup" || manifest.schema !== 1 ||
+      !manifest || manifest.format !== "EveriaBackup" || ![1, 2].includes(manifest.schema) ||
       typeof manifest.createdAt !== "string" || Number.isNaN(Date.parse(manifest.createdAt)) ||
       typeof manifest.appVersion !== "string" || manifest.appVersion.length > 40 ||
       !data || !Array.isArray(data.items) || !Array.isArray(assets) ||
+      !data.settings || Object.keys(data.settings).sort().join() !==
+        (manifest.schema === 2 ? "locale,sorts,theme,views" : "sorts,theme,views") ||
+      (manifest.schema === 2 && !["en", "fr", "ar"].includes(data.settings.locale)) ||
       assets.length > 2000 || data.items.length > 10000 ||
       manifest.recordCount !== data.items.length || manifest.assetCount !== assets.length ||
       !Array.isArray(manifest.assets) || manifest.assets.length !== assets.length ||
@@ -120,7 +123,7 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
       fs.mkdirSync(destination, { recursive: true });
     // A selected external drive that is missing must not trigger a fallback or mkdir.
     if (!fs.existsSync(destination) || !fs.statSync(destination).isDirectory())
-      throw new Error("Backup destination is unavailable.");
+      throw Object.assign(new Error("Backup destination is unavailable."), { code: "destination-unavailable" });
     const stamp = new Date(parsed.manifest.createdAt).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
     const filename = `Everia-${stamp}-${crypto.randomUUID()}.everiabackup`;
     const final = path.join(destination, filename);
@@ -151,12 +154,24 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
   }
   function beginRestore(pending) {
     if (fs.existsSync(journalPath)) throw new Error("An interrupted restore must be recovered first.");
-    verify(pending?.backup);
-    if (!Array.isArray(pending.raw) || pending.raw.length !== 4 ||
+    if (verify(pending?.backup).manifest.schema !== 2) throw new Error("Invalid recovery snapshot.");
+    if (!Array.isArray(pending.raw) || pending.raw.length !== 5 ||
         !pending.raw.every((v) => v === null || typeof v === "string") ||
         Buffer.byteLength(JSON.stringify(pending.raw)) > MAX_FILE) throw new Error("Invalid recovery snapshot.");
-    writeAtomic(journalPath, JSON.stringify(pending));
+    writeAtomic(journalPath, JSON.stringify({ version: 2, backup: pending.backup, raw: pending.raw }));
     return true;
+  }
+  function pendingRestore() {
+    if (!fs.existsSync(journalPath)) return null;
+    const pending = JSON.parse(readBounded(journalPath));
+    const legacy = pending?.version === undefined && Object.keys(pending).sort().join() === "backup,raw" && pending.raw?.length === 4;
+    const current = pending?.version === 2 && Object.keys(pending).sort().join() === "backup,raw,version" && pending.raw?.length === 5;
+    if ((!legacy && !current) || !Array.isArray(pending.raw) ||
+        !pending.raw.every((v) => v === null || typeof v === "string") ||
+        typeof pending.backup !== "string") throw new Error("Invalid recovery journal; it was preserved.");
+    if (verify(pending.backup).manifest.schema !== (legacy ? 1 : 2))
+      throw new Error("Invalid recovery journal; it was preserved.");
+    return pending;
   }
   return {
     config, setConfig, write, retention, listManaged,
@@ -164,7 +179,7 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
       (!value.lastSuccess || Date.now() - Date.parse(value.lastSuccess) >= 24 * 3600 * 1000); },
     read: (file) => { const contents = readBounded(file); verify(contents); return contents; },
     beginRestore,
-    pendingRestore: () => fs.existsSync(journalPath) ? JSON.parse(readBounded(journalPath)) : null,
+    pendingRestore,
     finishRestore: () => fs.unlinkSync(journalPath),
   };
 }

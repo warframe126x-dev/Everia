@@ -8,7 +8,7 @@ import {
 } from "./catalogs";
 import type { Locale } from "./locale";
 
-type StringKey = {
+export type StringKey = {
   [K in MessageKey]: (typeof en)[K] extends string ? K : never;
 }[MessageKey];
 type CountKey = Exclude<MessageKey, StringKey>;

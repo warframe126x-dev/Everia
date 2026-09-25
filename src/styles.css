@@ -1579,6 +1579,16 @@ textarea {
   color: #738089;
   font-size: 9px;
 }
+.locale-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 180px;
+  margin-top: 16px;
+  color: #9aa6ae;
+  font-size: 10px;
+  font-weight: 600;
+}
 .background-modes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

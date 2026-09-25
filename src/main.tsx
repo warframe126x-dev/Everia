@@ -5,6 +5,7 @@ import "./styles.css";
 import { recoverPendingRestore, scheduleAutomaticBackup } from "./backup";
 import { storage } from "./storage";
 import { LocalizationProvider } from "./localization/Localization";
+import { recoveryExplanation } from "./localization/bootstrap";
 
 async function start() {
   try {
@@ -22,8 +23,8 @@ async function start() {
     setTimeout(() => void scheduleAutomaticBackup(), 5000);
     setInterval(() => void scheduleAutomaticBackup(), 60 * 60 * 1000);
   } catch (error) {
-    document.getElementById("root")!.textContent =
-      `Everia could not recover an interrupted restore. Your data was preserved. ${error instanceof Error ? error.message : "Please retry."}`;
+    console.error("Everia restore recovery failed:", error);
+    document.getElementById("root")!.textContent = recoveryExplanation();
   }
 }
 void start();

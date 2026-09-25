@@ -476,6 +476,7 @@ test("corrupt credential status is honest while public providers initialize", as
   delete process.env.EVERIA_TMDB_TOKEN;
   const status = providers.providerStatus("tmdb");
   assert.equal(status.available, false);
+  assert.equal(status.reasonCode, "credential-unreadable");
   assert.match(status.reason, /could not be read/);
   assert.doesNotMatch(status.reason, /corrupt private file/);
   global.fetch = async () => { throw new Error("offline"); };

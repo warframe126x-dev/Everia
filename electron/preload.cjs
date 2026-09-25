@@ -35,7 +35,15 @@ contextBridge.exposeInMainWorld("everiaWindow", {
 contextBridge.exposeInMainWorld("everiaBackup", {
   config: () => ipcRenderer.invoke("backup:config"),
   isDue: () => ipcRenderer.invoke("backup:due"),
-  write: (file) => ipcRenderer.invoke("backup:write", file),
+  write: async (file) => {
+    const response = await ipcRenderer.invoke("backup:write", file);
+    if (!response?.ok) {
+      const error = new Error("Backup could not be written.");
+      error.code = response?.code ?? "backup-failed";
+      throw error;
+    }
+    return response.data;
+  },
   chooseDestination: () => ipcRenderer.invoke("backup:choose-destination"),
   setEnabled: (enabled) => ipcRenderer.invoke("backup:set-enabled", enabled),
   selectBackup: () => ipcRenderer.invoke("backup:select"),

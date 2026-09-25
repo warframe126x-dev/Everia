@@ -1,5 +1,115 @@
 /** English defines the keys and message kinds for every locale. */
 export const en = {
+  "errors.localeSave": "Language could not be saved. Try again.",
+  "settings.personalize": "PERSONALIZE",
+  "settings.intro": "Shape Everia into a universe that feels like yours.",
+  "settings.appearance": "Appearance",
+  "settings.appearanceDescription":
+    "Keep Everia readable while choosing the colors that feel like yours.",
+  "settings.accentColor": "Accent color",
+  "settings.backgroundColor": "Background color",
+  "settings.textColor": "Text color",
+  "settings.restoreColors": "Restore default colors",
+  "settings.background": "Background",
+  "settings.backgroundDescription":
+    "Use Everia’s approved wallpaper, a solid color, or a personal image copied into local storage.",
+  "settings.wallpaperError":
+    "The wallpaper could not be stored. Your previous image was preserved.",
+  "settings.defaultMode": "Everia Default",
+  "settings.defaultHelp": "The built-in Everia universe.",
+  "settings.solidMode": "Solid Color",
+  "settings.solidHelp": "Uses your selected background color.",
+  "settings.customMode": "Custom Image",
+  "settings.customHelp": "Uses a locally stored personal image.",
+  "settings.customImage": "Custom image",
+  "settings.chooseWallpaper": "Choose custom wallpaper",
+  "settings.copying": "Copying into Everia…",
+  "settings.localCopyReady": "A local copy is ready.",
+  "settings.imageLimits": "PNG, JPEG, WebP or GIF up to 30 MB.",
+  "settings.imageFit": "Image fit",
+  "settings.fitCover": "Cover",
+  "settings.fitContain": "Contain",
+  "settings.fitStretch": "Stretch",
+  "settings.dimming": "Background dimming",
+  "settings.restoreAppearance": "Restore appearance defaults",
+  "settings.onlineSources": "Online Sources",
+  "settings.onlineDescription":
+    "Connect metadata providers for discovery and import. Saved entries remain local and independent of every provider.",
+  "settings.localLibrary": "Local-first library",
+  "settings.localDescription":
+    "Your entries, covers, personal information and custom wallpaper are stored on this device. Online sources can help you discover items, but losing a source will never remove what you already saved.",
+  "settings.credits": "Metadata credits",
+  "settings.creditsDescription":
+    "Provider attribution is kept here, separate from your personal library. Everia supports IGDB, RAWG, TMDB, OMDb, RanobeDB, Tenrai and Jikan adapters.",
+  "settings.tmdbAlt": "The Movie Database (TMDB)",
+  "settings.tmdbNotice":
+    "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+  "settings.rawgIntro": "RAWG metadata is provided by",
+  "settings.omdbIntro": ". OMDb data is licensed under",
+  "settings.animeRights":
+    ". Anime and manga metadata may include third-party content surfaced through Tenrai or Jikan and remains subject to its respective owners’ rights.",
+  "providers.games": "Games",
+  "providers.moviesTv": "Movies & TV Shows",
+  "providers.lightNovels": "Light Novels",
+  "providers.animeManga": "Anime & Manga",
+  "providers.primary": "Primary",
+  "providers.backup": "Backup",
+  "providers.stateConnected": "Connected",
+  "providers.stateFailed": "Connection failed",
+  "providers.stateUnchecked": "Not checked",
+  "providers.stateAvailable": "Available",
+  "providers.stateNotConfigured": "Not configured",
+  "providers.clientId": "Client ID",
+  "providers.clientSecret": "Client Secret",
+  "providers.twitchClientId": "Twitch Client ID",
+  "providers.twitchSecret": "Twitch Client Secret",
+  "providers.readToken": "API Read Access Token",
+  "providers.tmdbToken": "TMDB Read Access Token",
+  "providers.apiKey": "API Key",
+  "providers.providerApiKey": "{provider} API Key",
+  "providers.savedSecurely": "Saved securely",
+  "providers.noConfiguration": "No configuration required",
+  "providers.saveConnect": "Save / Connect",
+  "providers.testConnection": "Test Connection",
+  "providers.removeCredentials": "Remove Credentials",
+  "providers.saving": "Saving…",
+  "providers.testing": "Testing…",
+  "providers.removing": "Removing…",
+  "providers.connected": "{provider} is connected.",
+  "providers.removed": "Credentials removed for {provider}.",
+  "providers.desktopOnly":
+    "Online source configuration is available in the Everia desktop app.",
+  "providers.operationFailed":
+    "The online source operation failed. Your saved entries are unaffected.",
+  "providers.credentialUnreadable":
+    "Saved provider credentials could not be read. The file was preserved.",
+  "providers.protectionUnavailable":
+    "Protected credential storage is unavailable on this device.",
+  "providers.credentialRequired":
+    "Enter the required credentials before saving.",
+  "providers.notConfiguredHelp": "Configure {provider} to use this source.",
+  "providers.connectionFailedHelp":
+    "{provider} could not connect. Your library is unaffected.",
+  "providers.credentialsRejected": "The source rejected saved credentials.",
+  "providers.timeout": "The connection timed out. Try again.",
+  "providers.rateLimit": "The source is busy. Try again later.",
+  "providers.network":
+    "The source could not be reached. Check your connection.",
+  "backup.success": "Backup created successfully.",
+  "backup.failure":
+    "Backup could not be created. Your live library is unchanged.",
+  "backup.invalid": "This backup is invalid or damaged.",
+  "backup.unsupported": "This backup was made with a newer unsupported schema.",
+  "backup.integrity": "Backup integrity verification failed.",
+  "backup.destinationUnavailable":
+    "The selected backup destination is unavailable. Your live library is unchanged.",
+  "backup.restoreFailed":
+    "Restore could not be completed. Your previous library was preserved.",
+  "backup.interrupted":
+    "An interrupted restore must be recovered before opening the library.",
+  "backup.recoveryFailed":
+    "Everia could not recover an interrupted restore. Your data was preserved. Please retry.",
+
   "editor.addEntry": "Add an entry",
   "editor.newEntry": "NEW ENTRY",
   "editor.addToEveria": "Add to Everia",
@@ -181,6 +291,120 @@ export type CatalogShape = {
 };
 
 export const fr = {
+  "errors.localeSave": "Impossible d’enregistrer la langue. Réessayez.",
+  "settings.personalize": "PERSONNALISER",
+  "settings.intro": "Faites d’Everia un univers qui vous ressemble.",
+  "settings.appearance": "Apparence",
+  "settings.appearanceDescription":
+    "Choisissez vos couleurs tout en préservant la lisibilité d’Everia.",
+  "settings.accentColor": "Couleur d’accentuation",
+  "settings.backgroundColor": "Couleur de fond",
+  "settings.textColor": "Couleur du texte",
+  "settings.restoreColors": "Rétablir les couleurs par défaut",
+  "settings.background": "Arrière-plan",
+  "settings.backgroundDescription":
+    "Utilisez le fond d’écran d’Everia, une couleur unie ou une image personnelle copiée dans le stockage local.",
+  "settings.wallpaperError":
+    "Impossible d’enregistrer le fond d’écran. Votre image précédente a été conservée.",
+  "settings.defaultMode": "Fond Everia par défaut",
+  "settings.defaultHelp": "L’univers intégré à Everia.",
+  "settings.solidMode": "Couleur unie",
+  "settings.solidHelp": "Utilise la couleur de fond choisie.",
+  "settings.customMode": "Image personnalisée",
+  "settings.customHelp": "Utilise une image personnelle stockée localement.",
+  "settings.customImage": "Image personnalisée",
+  "settings.chooseWallpaper": "Choisir un fond d’écran personnalisé",
+  "settings.copying": "Copie dans Everia…",
+  "settings.localCopyReady": "Une copie locale est prête.",
+  "settings.imageLimits": "PNG, JPEG, WebP ou GIF jusqu’à 30 Mo.",
+  "settings.imageFit": "Ajustement de l’image",
+  "settings.fitCover": "Remplir",
+  "settings.fitContain": "Adapter",
+  "settings.fitStretch": "Étirer",
+  "settings.dimming": "Assombrissement du fond",
+  "settings.restoreAppearance": "Rétablir l’apparence par défaut",
+  "settings.onlineSources": "Sources en ligne",
+  "settings.onlineDescription":
+    "Connectez des sources de métadonnées pour découvrir et importer des titres. Les entrées enregistrées restent locales et indépendantes des sources.",
+  "settings.localLibrary": "Collection locale",
+  "settings.localDescription":
+    "Vos entrées, couvertures, informations personnelles et fond d’écran personnalisé sont stockés sur cet appareil. Les sources en ligne facilitent la découverte, mais leur perte ne supprime jamais les éléments déjà enregistrés.",
+  "settings.credits": "Crédits des métadonnées",
+  "settings.creditsDescription":
+    "Les crédits des sources figurent ici, séparément de votre collection personnelle. Everia prend en charge IGDB, RAWG, TMDB, OMDb, RanobeDB, Tenrai et Jikan.",
+  "settings.tmdbAlt": "The Movie Database (TMDB)",
+  "settings.tmdbNotice":
+    "Ce produit utilise l’API TMDB, mais n’est ni approuvé ni certifié par TMDB.",
+  "settings.rawgIntro": "Les métadonnées RAWG sont fournies par",
+  "settings.omdbIntro": ". Les données OMDb sont proposées sous licence",
+  "settings.animeRights":
+    ". Les métadonnées d’anime et de manga issues de Tenrai ou Jikan peuvent contenir des contenus tiers soumis aux droits de leurs propriétaires respectifs.",
+  "providers.games": "Jeux",
+  "providers.moviesTv": "Films et séries TV",
+  "providers.lightNovels": "Light novels",
+  "providers.animeManga": "Animés et mangas",
+  "providers.primary": "Principal",
+  "providers.backup": "Secours",
+  "providers.stateConnected": "Connecté",
+  "providers.stateFailed": "Échec de connexion",
+  "providers.stateUnchecked": "Non vérifié",
+  "providers.stateAvailable": "Disponible",
+  "providers.stateNotConfigured": "Non configuré",
+  "providers.clientId": "Identifiant client",
+  "providers.clientSecret": "Secret client",
+  "providers.twitchClientId": "Identifiant client Twitch",
+  "providers.twitchSecret": "Secret client Twitch",
+  "providers.readToken": "Jeton d’accès en lecture à l’API",
+  "providers.tmdbToken": "Jeton d’accès en lecture TMDB",
+  "providers.apiKey": "Clé API",
+  "providers.providerApiKey": "Clé API {provider}",
+  "providers.savedSecurely": "Enregistré de façon sécurisée",
+  "providers.noConfiguration": "Aucune configuration requise",
+  "providers.saveConnect": "Enregistrer / Connecter",
+  "providers.testConnection": "Tester la connexion",
+  "providers.removeCredentials": "Supprimer les identifiants",
+  "providers.saving": "Enregistrement…",
+  "providers.testing": "Vérification…",
+  "providers.removing": "Suppression…",
+  "providers.connected": "{provider} est connecté.",
+  "providers.removed": "Identifiants supprimés pour {provider}.",
+  "providers.desktopOnly":
+    "La configuration des sources en ligne est disponible dans l’application de bureau Everia.",
+  "providers.operationFailed":
+    "L’opération sur la source en ligne a échoué. Vos entrées enregistrées ne sont pas affectées.",
+  "providers.credentialUnreadable":
+    "Impossible de lire les identifiants enregistrés. Le fichier a été conservé.",
+  "providers.protectionUnavailable":
+    "Le stockage protégé des identifiants est indisponible sur cet appareil.",
+  "providers.credentialRequired":
+    "Saisissez les identifiants requis avant d’enregistrer.",
+  "providers.notConfiguredHelp":
+    "Configurez {provider} pour utiliser cette source.",
+  "providers.connectionFailedHelp":
+    "{provider} n’a pas pu se connecter. Votre collection n’est pas affectée.",
+  "providers.credentialsRejected":
+    "La source a refusé les identifiants enregistrés.",
+  "providers.timeout": "La connexion a expiré. Réessayez.",
+  "providers.rateLimit": "La source est occupée. Réessayez plus tard.",
+  "providers.network":
+    "Impossible de joindre la source. Vérifiez votre connexion.",
+  "backup.success": "Sauvegarde créée.",
+  "backup.failure":
+    "Impossible de créer la sauvegarde. Votre collection actuelle est inchangée.",
+  "backup.invalid": "Cette sauvegarde est invalide ou endommagée.",
+  "backup.unsupported":
+    "Cette sauvegarde utilise un format plus récent non pris en charge.",
+  "backup.integrity":
+    "La vérification de l’intégrité de la sauvegarde a échoué.",
+  "backup.destinationUnavailable":
+    "L’emplacement choisi pour les sauvegardes est indisponible. Votre collection actuelle est inchangée.",
+  "backup.restoreFailed":
+    "Impossible de terminer la restauration. Votre collection précédente a été conservée.",
+  "backup.interrupted":
+    "Une restauration interrompue doit être récupérée avant d’ouvrir la collection.",
+  "backup.recoveryFailed":
+    "Everia n’a pas pu récupérer une restauration interrompue. Vos données ont été conservées. Réessayez.",
+
   "editor.addEntry": "Ajouter une entrée",
   "editor.newEntry": "NOUVELLE ENTRÉE",
   "editor.addToEveria": "Ajouter à Everia",
@@ -361,6 +585,111 @@ export const fr = {
 } satisfies CatalogShape;
 
 export const ar = {
+  "errors.localeSave": "تعذّر حفظ اللغة. حاول مجددًا.",
+  "settings.personalize": "تخصيص",
+  "settings.intro": "اجعل Everia عالمًا يناسبك.",
+  "settings.appearance": "المظهر",
+  "settings.appearanceDescription":
+    "اختر ألوانك مع الحفاظ على سهولة قراءة Everia.",
+  "settings.accentColor": "لون التمييز",
+  "settings.backgroundColor": "لون الخلفية",
+  "settings.textColor": "لون النص",
+  "settings.restoreColors": "استعادة الألوان الافتراضية",
+  "settings.background": "الخلفية",
+  "settings.backgroundDescription":
+    "استخدم خلفية Everia، أو لونًا موحدًا، أو صورة شخصية تُنسخ إلى التخزين المحلي.",
+  "settings.wallpaperError": "تعذّر حفظ الخلفية. احتُفظ بالصورة السابقة.",
+  "settings.defaultMode": "خلفية Everia الافتراضية",
+  "settings.defaultHelp": "عالم Everia المدمج.",
+  "settings.solidMode": "لون موحد",
+  "settings.solidHelp": "يستخدم لون الخلفية الذي اخترته.",
+  "settings.customMode": "صورة مخصصة",
+  "settings.customHelp": "يستخدم صورة شخصية محفوظة محليًا.",
+  "settings.customImage": "صورة مخصصة",
+  "settings.chooseWallpaper": "اختيار خلفية مخصصة",
+  "settings.copying": "جارٍ النسخ إلى Everia…",
+  "settings.localCopyReady": "النسخة المحلية جاهزة.",
+  "settings.imageLimits":
+    "PNG أو JPEG أو WebP أو GIF بحجم يصل إلى 30 ميغابايت.",
+  "settings.imageFit": "ملاءمة الصورة",
+  "settings.fitCover": "ملء",
+  "settings.fitContain": "احتواء",
+  "settings.fitStretch": "تمديد",
+  "settings.dimming": "تعتيم الخلفية",
+  "settings.restoreAppearance": "استعادة المظهر الافتراضي",
+  "settings.onlineSources": "المصادر عبر الإنترنت",
+  "settings.onlineDescription":
+    "اربط مصادر البيانات الوصفية للاكتشاف والاستيراد. تظل العناصر المحفوظة محلية ومستقلة عن جميع المصادر.",
+  "settings.localLibrary": "مجموعة محلية",
+  "settings.localDescription":
+    "تُخزّن عناصرك وأغلفتك ومعلوماتك الشخصية وخلفيتك المخصصة على هذا الجهاز. تساعدك المصادر عبر الإنترنت على اكتشاف العناصر، لكن فقدان مصدر لا يحذف ما حفظته.",
+  "settings.credits": "اعتمادات البيانات الوصفية",
+  "settings.creditsDescription":
+    "تظهر اعتمادات المصادر هنا بمعزل عن مجموعتك الشخصية. يدعم Everia مصادر IGDB وRAWG وTMDB وOMDb وRanobeDB وTenrai وJikan.",
+  "settings.tmdbAlt": "The Movie Database (TMDB)",
+  "settings.tmdbNotice":
+    "يستخدم هذا المنتج واجهة TMDB البرمجية، لكنه غير معتمد أو موصى به من TMDB.",
+  "settings.rawgIntro": "تُقدَّم بيانات RAWG الوصفية من",
+  "settings.omdbIntro": ". تُرخَّص بيانات OMDb بموجب",
+  "settings.animeRights":
+    ". قد تتضمن بيانات الأنمي والمانغا المقدّمة عبر Tenrai أو Jikan محتوى لأطراف أخرى يخضع لحقوق مالكيه.",
+  "providers.games": "الألعاب",
+  "providers.moviesTv": "الأفلام والمسلسلات",
+  "providers.lightNovels": "الروايات الخفيفة",
+  "providers.animeManga": "الأنمي والمانغا",
+  "providers.primary": "أساسي",
+  "providers.backup": "احتياطي",
+  "providers.stateConnected": "متصل",
+  "providers.stateFailed": "فشل الاتصال",
+  "providers.stateUnchecked": "لم يُتحقق منه",
+  "providers.stateAvailable": "متاح",
+  "providers.stateNotConfigured": "غير مُعدّ",
+  "providers.clientId": "معرّف العميل",
+  "providers.clientSecret": "سر العميل",
+  "providers.twitchClientId": "معرّف عميل Twitch",
+  "providers.twitchSecret": "سر عميل Twitch",
+  "providers.readToken": "رمز وصول قراءة API",
+  "providers.tmdbToken": "رمز وصول قراءة TMDB",
+  "providers.apiKey": "مفتاح API",
+  "providers.providerApiKey": "مفتاح API لـ {provider}",
+  "providers.savedSecurely": "محفوظ بأمان",
+  "providers.noConfiguration": "لا يتطلب إعدادًا",
+  "providers.saveConnect": "حفظ / اتصال",
+  "providers.testConnection": "اختبار الاتصال",
+  "providers.removeCredentials": "حذف بيانات الاعتماد",
+  "providers.saving": "جارٍ الحفظ…",
+  "providers.testing": "جارٍ الاختبار…",
+  "providers.removing": "جارٍ الحذف…",
+  "providers.connected": "{provider} متصل.",
+  "providers.removed": "حُذفت بيانات اعتماد {provider}.",
+  "providers.desktopOnly":
+    "إعداد المصادر عبر الإنترنت متاح في تطبيق Everia لسطح المكتب.",
+  "providers.operationFailed":
+    "فشلت عملية المصدر عبر الإنترنت. لا تتأثر عناصرك المحفوظة.",
+  "providers.credentialUnreadable":
+    "تعذّرت قراءة بيانات الاعتماد المحفوظة. احتُفظ بالملف.",
+  "providers.protectionUnavailable":
+    "تخزين بيانات الاعتماد المحمي غير متاح على هذا الجهاز.",
+  "providers.credentialRequired": "أدخل بيانات الاعتماد المطلوبة قبل الحفظ.",
+  "providers.notConfiguredHelp": "أعِدّ {provider} لاستخدام هذا المصدر.",
+  "providers.connectionFailedHelp": "تعذّر اتصال {provider}. لا تتأثر مجموعتك.",
+  "providers.credentialsRejected": "رفض المصدر بيانات الاعتماد المحفوظة.",
+  "providers.timeout": "انتهت مهلة الاتصال. حاول مجددًا.",
+  "providers.rateLimit": "المصدر مشغول. حاول لاحقًا.",
+  "providers.network": "تعذّر الوصول إلى المصدر. تحقق من اتصالك.",
+  "backup.success": "أُنشئت النسخة الاحتياطية بنجاح.",
+  "backup.failure": "تعذّر إنشاء النسخة الاحتياطية. لم تتغير مجموعتك الحالية.",
+  "backup.invalid": "هذه النسخة الاحتياطية غير صالحة أو تالفة.",
+  "backup.unsupported": "أُنشئت هذه النسخة الاحتياطية بتنسيق أحدث غير مدعوم.",
+  "backup.integrity": "فشل التحقق من سلامة النسخة الاحتياطية.",
+  "backup.destinationUnavailable":
+    "وجهة النسخ الاحتياطي المحددة غير متاحة. لم تتغير مجموعتك الحالية.",
+  "backup.restoreFailed": "تعذّر إكمال الاستعادة. احتُفظ بمجموعتك السابقة.",
+  "backup.interrupted":
+    "يجب استرداد عملية الاستعادة المنقطعة قبل فتح المجموعة.",
+  "backup.recoveryFailed":
+    "تعذّر على Everia استرداد عملية استعادة منقطعة. احتُفظ ببياناتك. حاول مجددًا.",
+
   "editor.addEntry": "إضافة عنصر",
   "editor.newEntry": "عنصر جديد",
   "editor.addToEveria": "إضافة إلى Everia",

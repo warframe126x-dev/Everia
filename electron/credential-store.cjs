@@ -1,5 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
+function credentialError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
 
 function createCredentialStore({
   safeStorage,
@@ -8,8 +13,9 @@ function createCredentialStore({
 }) {
   const assertProtected = () => {
     if (!safeStorage?.isEncryptionAvailable()) {
-      throw new Error(
+      throw credentialError(
         "Protected credential storage is unavailable on this device.",
+        "protection-unavailable",
       );
     }
     if (
@@ -17,8 +23,9 @@ function createCredentialStore({
       typeof safeStorage.getSelectedStorageBackend === "function" &&
       safeStorage.getSelectedStorageBackend() === "basic_text"
     ) {
-      throw new Error(
+      throw credentialError(
         "Protected credential storage is unavailable on this device.",
+        "protection-unavailable",
       );
     }
   };
@@ -35,7 +42,7 @@ function createCredentialStore({
       return parsed;
     } catch (error) {
       if (error?.code === "ENOENT") return { version: 1, providers: {} };
-      throw new Error("Saved provider credentials could not be read.");
+      throw credentialError("Saved provider credentials could not be read.", "credential-unreadable");
     }
   };
 
@@ -99,7 +106,7 @@ function createCredentialStore({
         const clientId = String(input?.clientId || "").trim();
         const clientSecret = String(input?.clientSecret || "").trim();
         if (!clientId || !clientSecret)
-          throw new Error("Client ID and Client Secret are required.");
+          throw credentialError("Client ID and Client Secret are required.", "credential-required");
         document.providers.igdb = {
           clientId,
           clientSecret: encrypt(clientSecret),
@@ -107,10 +114,11 @@ function createCredentialStore({
       } else if (["tmdb", "rawg", "omdb"].includes(provider)) {
         const token = String(input?.token || "").trim();
         if (!token)
-          throw new Error(
+          throw credentialError(
             provider === "tmdb"
               ? "API Read Access Token is required."
               : "API key is required.",
+            "credential-required",
           );
         document.providers[provider] = { token: encrypt(token) };
       } else {

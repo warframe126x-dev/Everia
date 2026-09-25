@@ -216,7 +216,12 @@ function backupHandler(action) {
 }
 ipcMain.handle("backup:config", backupHandler(() => backupStore.config()));
 ipcMain.handle("backup:due", backupHandler(() => backupStore.isDue()));
-ipcMain.handle("backup:write", backupHandler((_window, file) => backupStore.write(file)));
+ipcMain.handle("backup:write", backupHandler((_window, file) => {
+  try { return { ok: true, data: backupStore.write(file) }; }
+  catch (error) {
+    return { ok: false, code: error?.code === "destination-unavailable" ? error.code : "backup-failed" };
+  }
+}));
 ipcMain.handle("backup:pending", backupHandler(() => backupStore.pendingRestore()));
 ipcMain.handle("backup:begin-restore", backupHandler((_window, data) => backupStore.beginRestore(data)));
 ipcMain.handle("backup:finish-restore", backupHandler(() => backupStore.finishRestore()));

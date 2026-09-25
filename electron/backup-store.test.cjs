@@ -6,10 +6,11 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { createBackupStore, verify, retention } = require("./backup-store.cjs");
 const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
-function fixture(createdAt = new Date().toISOString()) {
+function fixture(createdAt = new Date().toISOString(), schema = 1) {
   const data = {items: [], settings: {theme: {accent:"#ffffff",background:"#000000",text:"#eeeeee",backgroundMode:"default",imageFit:"cover",backgroundDimming:0},sorts:{},views:{}}};
+  if (schema === 2) data.settings.locale = "fr";
   const assets = [];
-  return JSON.stringify({manifest: {format:"EveriaBackup",schema:1,appVersion:"1.0.0",createdAt,recordCount:0,assetCount:0,
+  return JSON.stringify({manifest: {format:"EveriaBackup",schema,appVersion:"1.0.0",createdAt,recordCount:0,assetCount:0,
     payloadSha256:digest(JSON.stringify({data,assets})),assets:[]},data,assets});
 }
 function setup(fn) {
@@ -22,11 +23,16 @@ function setup(fn) {
 test("backup format, integrity, truncation, duplicate and unsafe asset entries", () => {
   const original = fixture();
   assert.equal(verify(original).manifest.schema, 1);
+  assert.equal(verify(fixture(undefined, 2)).data.settings.locale, "fr");
   assert.throws(() => verify(original.slice(0,-1)));
   const doc = JSON.parse(original);
-  doc.manifest.schema = 2;
+  doc.manifest.schema = 3;
   assert.throws(() => verify(JSON.stringify(doc)));
   doc.manifest.schema = 1;
+  const malformedLocale = JSON.parse(fixture(undefined, 2));
+  malformedLocale.data.settings.locale = "es";
+  malformedLocale.manifest.payloadSha256 = digest(JSON.stringify({data:malformedLocale.data,assets:malformedLocale.assets}));
+  assert.throws(() => verify(JSON.stringify(malformedLocale)));
   doc.data.items.push({id:"bad"});
   assert.throws(() => verify(JSON.stringify(doc)));
   doc.data.items.pop();
@@ -43,12 +49,12 @@ test("backup format, integrity, truncation, duplicate and unsafe asset entries",
   assert.throws(() => verify(JSON.stringify(doc)), /Invalid or duplicate/);
 });
 test("atomic write validates final file, unavailable destination preserves last success", () => setup((store,root,destination) => {
-  const first = store.write(fixture());
-  assert.equal(fs.readFileSync(first,"utf8"), fixture(JSON.parse(fs.readFileSync(first,"utf8")).manifest.createdAt));
+  const first = store.write(fixture(undefined, 2));
+  assert.equal(fs.readFileSync(first,"utf8"), fixture(JSON.parse(fs.readFileSync(first,"utf8")).manifest.createdAt, 2));
   const saved = store.config().lastSuccess;
   store.setConfig({ destination }); // Explicitly selected removable destination, even if path matches default.
   fs.renameSync(destination, `${destination}-removed`);
-  assert.throws(() => store.write(fixture()), /unavailable/);
+  assert.throws(() => store.write(fixture()), (error) => error.code === "destination-unavailable");
   assert.equal(store.config().lastSuccess, saved);
   assert.match(store.config().lastFailure.message, /unavailable/);
   assert(fs.existsSync(path.join(`${destination}-removed`,path.basename(first))));
@@ -69,12 +75,30 @@ test("daily weekly monthly retention selects generations and one snapshot can sa
   assert(kept.size >= 7);
 });
 test("restore journal persists and cannot silently replace an interrupted operation", () => setup((store,root) => {
-  const old = fixture();
-  store.beginRestore({backup:old,raw:[null,null,null,null]});
+  const old = fixture(undefined, 2);
+  store.beginRestore({backup:old,raw:[null,null,null,null,null]});
   assert.equal(store.pendingRestore().backup, old);
-  assert.throws(()=>store.beginRestore({backup:old,raw:[null,null,null,null]}), /interrupted/);
+  assert.equal(store.pendingRestore().version, 2);
+  assert.throws(()=>store.beginRestore({backup:old,raw:[null,null,null,null,null]}), /interrupted/);
   const another = createBackupStore(root);
   assert.equal(another.pendingRestore().backup,old);
   another.finishRestore();
   assert.equal(store.pendingRestore(),null);
+}));
+test("schema 2 journal accepts fifth raw locale and damaged journal is retained", () => setup((store, root) => {
+  const previous = fixture(undefined, 2);
+  store.beginRestore({ backup: previous, raw: [null, null, null, null, '"ar"'] });
+  assert.equal(store.pendingRestore().raw[4], '"ar"');
+  store.finishRestore();
+  const journal = path.join(root, "restore-journal.v1.json");
+  fs.writeFileSync(journal, JSON.stringify({ backup: fixture(), raw: [null, null, null, null] }));
+  assert.equal(store.pendingRestore().raw.length, 4);
+  store.finishRestore();
+  assert.throws(() => store.beginRestore({ backup: previous, raw: [null, null, null, null, 17] }), /Invalid recovery snapshot/);
+  fs.writeFileSync(journal, '{"backup":');
+  assert.throws(() => store.pendingRestore());
+  assert(fs.existsSync(journal));
+  fs.writeFileSync(journal, JSON.stringify({ version: 3, backup: previous, raw: [null, null, null, null, null] }));
+  assert.throws(() => store.pendingRestore(), /Invalid recovery journal/);
+  assert(fs.existsSync(journal));
 }));
