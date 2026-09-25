@@ -7,11 +7,12 @@ import {
   MonitorPlay,
   Settings,
 } from "lucide-react";
-import { categoryInfo } from "./data";
+import { categoryInfo, categoryLabel } from "./data";
 import { assetUrl } from "./assetPaths";
 import { categoryArtworkUrl } from "./categoryAssets";
 
 import { categories, type Category, type MediaItem } from "./types";
+import { useLocalization } from "./localization/Localization";
 
 const categoryIcons: Record<Category, typeof BookOpen> = {
   games: Gamepad2,
@@ -31,6 +32,7 @@ export function HomeView({
   onOpen: (category: Category) => void;
   onSettings: () => void;
 }) {
+  const { locale, t, count: formatCount } = useLocalization();
   return (
     <div className="home-page">
       <div className="home-atmosphere" aria-hidden="true" />
@@ -41,7 +43,7 @@ export function HomeView({
           </span>
           <div>
             <h1>EVERIA</h1>
-            <p>Your Personal Universe</p>
+            <p>{t("home.tagline")}</p>
           </div>
         </div>
         <div className="category-grid">
@@ -64,17 +66,15 @@ export function HomeView({
                 <span className="card-icon">
                   <Icon />
                 </span>
-                <strong>{info.label}</strong>
-                <small>
-                  {count} {count === 1 ? "entry" : "entries"}
-                </small>
+                <strong>{categoryLabel(category, locale)}</strong>
+                <small>{formatCount("home.entryCount", count)}</small>
               </button>
             );
           })}
         </div>
         <footer className="home-footer">
-          <em>“Stories, worlds, and experiences that stay with you.”</em>
-          <button aria-label="Settings" onClick={onSettings}>
+          <em>{t("home.footer")}</em>
+          <button aria-label={t("navigation.settings")} onClick={onSettings}>
             <Settings />
           </button>
         </footer>

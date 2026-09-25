@@ -10,6 +10,11 @@ import "fake-indexeddb/auto";
 import App from "./App";
 import { storeCover, readCover, readWallpaper } from "./covers";
 import { Cover } from "./Cover";
+import { LocalizationProvider } from "./localization/Localization";
+import type { ReactElement } from "react";
+
+const renderEnglish = (ui: ReactElement) =>
+  render(<LocalizationProvider initialLocale="en">{ui}</LocalizationProvider>);
 
 afterEach(() => {
   cleanup();
@@ -18,7 +23,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 test("details are read-only until Edit, then save status, rating and notes", async () => {
-  const app = render(<App />);
+  const app = renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: "Add item" }));
   fireEvent.click(screen.getByRole("button", { name: "Manual entry" }));
@@ -44,7 +49,7 @@ test("details are read-only until Edit, then save status, rating and notes", asy
   expect(screen.getAllByText("Played").length).toBeGreaterThan(0);
   expect(screen.getByLabelText("9 out of 10")).toBeDefined();
   app.unmount();
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(
     screen.getByRole("button", { name: /Open Offline adventure/ }),
@@ -69,7 +74,7 @@ test("failed entry persistence keeps edits recoverable and rejects quick changes
       },
     ]),
   );
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: /Open Original/ }));
   const originalSetItem = Storage.prototype.setItem;
@@ -113,7 +118,7 @@ test("failed entry persistence keeps edits recoverable and rejects quick changes
 });
 
 test("Home artwork resolves from the app document and outer branding is removed", () => {
-  const { container } = render(<App />);
+  const { container } = renderEnglish(<App />);
   expect(container.querySelector(".home-header")).toBeNull();
   const cards = [...container.querySelectorAll<HTMLElement>(".category-card")];
   expect(cards).toHaveLength(6);
@@ -129,7 +134,7 @@ test("Home artwork resolves from the app document and outer branding is removed"
 });
 
 test("interior artwork follows category while the sidebar uses the UI mark", () => {
-  const { container } = render(<App />);
+  const { container } = renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   const shell = container.querySelector<HTMLElement>(".app-shell")!;
   expect(shell.className).toContain("interior-art-view");
@@ -146,7 +151,7 @@ test("interior artwork follows category while the sidebar uses the UI mark", () 
 });
 
 test("online source failure leaves manual entry available", async () => {
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: "Add item" }));
   expect(
@@ -164,7 +169,7 @@ test("provider initialization never blocks Add Item search", async () => {
       data: { provider: "igdb", providerName: "IGDB", results: [] },
     }),
   });
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: "Add item" }));
   const query = await screen.findByPlaceholderText("Search by title...");
@@ -221,7 +226,7 @@ test("normalized online result opens a preview then the existing manual review f
     }),
     downloadImage: vi.fn(),
   });
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: "Add item" }));
   const query = await screen.findByPlaceholderText("Search by title...");
@@ -285,7 +290,7 @@ test("Online Sources saves secrets through IPC and clears the password field", a
     testConnection: vi.fn(),
     removeCredentials: vi.fn(),
   });
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   const token = await screen.findByLabelText("API Read Access Token");
   fireEvent.change(token, { target: { value: "private-token" } });
@@ -300,7 +305,7 @@ test("Online Sources saves secrets through IPC and clears the password field", a
   expect(screen.getByAltText("The Movie Database (TMDB)")).toBeDefined();
 });
 test("Escape closes add dialog", () => {
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: "Add item" }));
   fireEvent.click(screen.getByRole("button", { name: "Manual entry" }));
@@ -341,7 +346,7 @@ test("local cover survives database reopen and renders without network", async (
   expect(await readCover(id)).toBeDefined();
   URL.createObjectURL = vi.fn().mockReturnValue("blob:local-test");
   URL.revokeObjectURL = vi.fn();
-  render(
+  renderEnglish(
     <Cover
       item={{
         id: "1",
@@ -383,7 +388,7 @@ test("search filters entries and canceled deletion preserves data", () => {
       },
     ]),
   );
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.change(screen.getByLabelText("Search your universe"), {
     target: { value: "missing" },
@@ -421,7 +426,7 @@ test("status filters and per-category view preferences work and persist", () => 
       },
     ]),
   );
-  const app = render(<App />);
+  const app = renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: "Playing" }));
   expect(
@@ -435,7 +440,7 @@ test("status filters and per-category view preferences work and persist", () => 
     "active",
   );
   app.unmount();
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   expect(screen.getByRole("button", { name: "List view" }).className).toBe(
     "active",
@@ -460,7 +465,7 @@ test("returning from details preserves library query, filter, sort and view", as
       },
     ]),
   );
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.change(screen.getByLabelText("Search your universe"), {
     target: { value: "Alpha" },
@@ -490,7 +495,7 @@ test("returning from details preserves library query, filter, sort and view", as
 
 test("custom wallpaper is copied into local storage", async () => {
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ close() {} }));
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   fireEvent.change(screen.getByLabelText("Choose custom wallpaper"), {
     target: {
@@ -532,7 +537,7 @@ test("legacy v0.1 appearance migrates and Cancel discards entry edits", () => {
       },
     ]),
   );
-  render(<App />);
+  renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Games/ }));
   fireEvent.click(screen.getByRole("button", { name: /Open Kept title/ }));
   fireEvent.click(screen.getByRole("button", { name: "Edit" }));

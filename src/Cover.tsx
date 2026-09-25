@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BookOpen, Heart } from "lucide-react";
 import { readCover } from "./covers";
 import type { MediaItem } from "./types";
+import { useLocalization } from "./localization/Localization";
 
 export function Cover({
   item,
@@ -10,6 +11,7 @@ export function Cover({
   item: MediaItem;
   detail?: boolean;
 }) {
+  const { t } = useLocalization();
   const [url, setUrl] = useState<string>();
   useEffect(() => {
     let disposed = false;
@@ -32,11 +34,17 @@ export function Cover({
     };
   }, [item.coverUrl]);
   return (
-    <div className={detail ? "detail-cover cover" : "cover"}>
+    <div
+      className={detail ? "detail-cover cover" : "cover"}
+      role={url ? undefined : "img"}
+      aria-label={
+        url ? undefined : t("accessibility.coverOf", { title: item.title })
+      }
+    >
       {url ? (
         <img
           src={url}
-          alt={`Cover of ${item.title}`}
+          alt={t("accessibility.coverOf", { title: item.title })}
           style={{
             width: "100%",
             height: "100%",

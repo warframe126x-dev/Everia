@@ -1,3 +1,5 @@
+import { useLocalization } from "./localization/Localization";
+
 export function StarRating({
   rating,
   editable = false,
@@ -7,12 +9,17 @@ export function StarRating({
   editable?: boolean;
   onChange?: (rating?: number) => void;
 }) {
+  const { t, number } = useLocalization();
   const value = rating ?? 0;
   return (
     <div className={editable ? "star-rating editable" : "star-rating"}>
       <div
         className="stars"
-        aria-label={rating ? `${rating} out of 10` : "Not rated"}
+        aria-label={
+          rating
+            ? t("accessibility.ratingOutOfTen", { rating: number(rating) })
+            : t("accessibility.notRated")
+        }
       >
         {[0, 1, 2, 3, 4].map((star) => {
           const fill = Math.max(0, Math.min(1, value / 2 - star));
@@ -32,12 +39,16 @@ export function StarRating({
                 <>
                   <button
                     type="button"
-                    aria-label={`Rate ${star * 2 + 1} out of 10`}
+                    aria-label={t("accessibility.rateOutOfTen", {
+                      rating: number(star * 2 + 1),
+                    })}
                     onClick={() => onChange?.(star * 2 + 1)}
                   />
                   <button
                     type="button"
-                    aria-label={`Rate ${star * 2 + 2} out of 10`}
+                    aria-label={t("accessibility.rateOutOfTen", {
+                      rating: number(star * 2 + 2),
+                    })}
                     onClick={() => onChange?.(star * 2 + 2)}
                   />
                 </>
@@ -46,14 +57,16 @@ export function StarRating({
           );
         })}
       </div>
-      <strong>{rating ? `${rating}/10` : "Not rated"}</strong>
+      <strong>
+        {rating ? `${number(rating)}/10` : t("accessibility.notRated")}
+      </strong>
       {editable && rating && (
         <button
           type="button"
           className="clear-rating"
           onClick={() => onChange?.(undefined)}
         >
-          Clear
+          {t("accessibility.clearRating")}
         </button>
       )}
     </div>

@@ -1,7 +1,8 @@
 import { BookOpen, Grid2X2, List, Plus, Star } from "lucide-react";
-import { categoryInfo } from "./data";
+import { categoryLabel, subtypeLabel } from "./data";
 import { Cover } from "./Cover";
 import { statusLabel, statusOptions } from "./mediaConfig";
+import { useLocalization } from "./localization/Localization";
 import {
   type Category,
   type MediaItem,
@@ -37,40 +38,41 @@ export function LibraryView({
   onSelect: (item: MediaItem) => void;
   onAdd: () => void;
 }) {
+  const { locale, t, number } = useLocalization();
   return (
     <div className="page library-page">
       <div className="library-heading">
         <div>
-          <p className="kicker">COLLECTION</p>
+          <p className="kicker">{t("library.collection")}</p>
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
         <div className="library-controls">
           <label className="sort-control">
-            <span>Sort by</span>
+            <span>{t("library.sortBy")}</span>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
             >
-              <option value="dateAdded">Recently added</option>
-              <option value="title">Title</option>
-              <option value="releaseDate">Release date</option>
-              <option value="rating">Rating</option>
+              <option value="dateAdded">{t("library.recentlyAdded")}</option>
+              <option value="title">{t("library.title")}</option>
+              <option value="releaseDate">{t("library.releaseDate")}</option>
+              <option value="rating">{t("library.rating")}</option>
             </select>
           </label>
-          <div className="view-toggle" aria-label="Library view">
+          <div className="view-toggle" aria-label={t("library.view")}>
             <button
               className={viewMode === "grid" ? "active" : ""}
-              aria-label="Grid view"
-              title="Grid view"
+              aria-label={t("library.gridView")}
+              title={t("library.gridView")}
               onClick={() => setViewMode("grid")}
             >
               <Grid2X2 />
             </button>
             <button
               className={viewMode === "list" ? "active" : ""}
-              aria-label="List view"
-              title="List view"
+              aria-label={t("library.listView")}
+              title={t("library.listView")}
               onClick={() => setViewMode("list")}
             >
               <List />
@@ -79,14 +81,17 @@ export function LibraryView({
         </div>
       </div>
       {category && (
-        <div className="status-filters" aria-label="Filter by status">
+        <div
+          className="status-filters"
+          aria-label={t("library.filterByStatus")}
+        >
           <button
             className={statusFilter === "All" ? "active" : ""}
             onClick={() => setStatusFilter("All")}
           >
-            All
+            {t("library.all")}
           </button>
-          {statusOptions(category).map(({ value, label }) => (
+          {statusOptions(category, locale).map(({ value, label }) => (
             <button
               key={value}
               className={statusFilter === value ? "active" : ""}
@@ -103,24 +108,27 @@ export function LibraryView({
             <button
               className="media-card"
               key={item.id}
-              aria-label={`Open ${item.title}`}
+              aria-label={t("accessibility.openEntry", { title: item.title })}
               onClick={() => onSelect(item)}
             >
               <Cover item={item} />
               <div className="media-info">
                 <small>
-                  {item.subtype ?? categoryInfo[item.category].label}
+                  {item.subtype
+                    ? subtypeLabel(item.subtype, locale)
+                    : categoryLabel(item.category, locale)}
                 </small>
                 <strong>{item.title}</strong>
-                <span>{item.creator || "Unknown creator"}</span>
+                <span>{item.creator || t("library.unknownCreator")}</span>
                 <div className="media-meta">
                   <i
                     className={`status ${item.status.toLowerCase().replace(" ", "-")}`}
                   />
-                  {statusLabel(item.category, item.status)}
+                  {statusLabel(item.category, item.status, locale)}
                   {item.rating !== undefined && (
                     <b>
-                      <Star size={13} fill="currentColor" /> {item.rating}/10
+                      <Star size={13} fill="currentColor" />{" "}
+                      {number(item.rating)}/10
                     </b>
                   )}
                 </div>
@@ -133,15 +141,15 @@ export function LibraryView({
           <span>
             <BookOpen />
           </span>
-          <h3>No entries here yet</h3>
+          <h3>{t(category ? "library.empty" : "favorites.empty")}</h3>
           <p>
             {statusFilter === "All"
-              ? "Add one manually now. Online search will join it in a future build."
-              : "No entries match this status."}
+              ? t(category ? "library.emptyPrompt" : "favorites.emptyPrompt")
+              : t("library.noStatusMatches")}
           </p>
           {statusFilter === "All" && (
             <button className="primary" onClick={onAdd}>
-              <Plus size={18} /> Add an item
+              <Plus size={18} /> {t("library.addItem")}
             </button>
           )}
         </div>

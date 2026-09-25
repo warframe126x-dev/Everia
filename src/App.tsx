@@ -19,7 +19,7 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { categoryInfo } from "./data";
+import { categoryLabel, categoryDescription } from "./data";
 import { storage, storageWarning } from "./storage";
 
 import { validateItems } from "./validation";
@@ -35,6 +35,7 @@ import {
 import { useWallpaper } from "./useWallpaper";
 import { assetUrl } from "./assetPaths";
 import { categoryArtworkUrl, defaultArtworkUrl } from "./categoryAssets";
+import { useLocalization } from "./localization/Localization";
 
 type LibraryRoute = "category" | "favorites";
 type View = "home" | LibraryRoute | "details" | "settings";
@@ -64,6 +65,7 @@ const emptyDraft = (
 });
 
 function App() {
+  const { locale, t } = useLocalization();
   const [items, setItems] = useState<MediaItem[]>(storage.loadItems);
   const [theme, setTheme] = useState<ThemeSettings>(storage.loadTheme);
   const [sorts, setSorts] = useState<Record<string, SortKey>>(
@@ -85,7 +87,15 @@ function App() {
   const libraryScrollPosition = useRef(0);
   const [navOpen, setNavOpen] = useState(false);
 
-  const [error, setError] = useState(storageWarning);
+  const [error, setError] = useState<
+    | ""
+    | "errors.savedDataUnreadable"
+    | "errors.themeSave"
+    | "errors.sortSave"
+    | "errors.viewSave"
+    | "errors.removeFailed"
+    | "errors.changesSave"
+  >(storageWarning ? "errors.savedDataUnreadable" : "");
   const customWallpaper = useWallpaper(
     theme.backgroundMode === "custom" ? theme.customWallpaperId : undefined,
   );
@@ -93,21 +103,21 @@ function App() {
     try {
       storage.saveTheme(theme);
     } catch {
-      setError("Theme could not be saved.");
+      setError("errors.themeSave");
     }
   }, [theme]);
   useEffect(() => {
     try {
       storage.saveSorts(sorts);
     } catch {
-      setError("Sort preference could not be saved.");
+      setError("errors.sortSave");
     }
   }, [sorts]);
   useEffect(() => {
     try {
       storage.saveViews(viewModes);
     } catch {
-      setError("View preference could not be saved.");
+      setError("errors.viewSave");
     }
   }, [viewModes]);
   useEffect(() => {
@@ -185,12 +195,12 @@ function App() {
   };
 
   const removeItem = (id: string) => {
-    if (!window.confirm("Remove this entry? This cannot be undone.")) return;
+    if (!window.confirm(t("errors.removeConfirm"))) return;
     const next = items.filter((item) => item.id !== id);
     try {
       storage.saveItems(next);
     } catch {
-      setError("Entry could not be removed.");
+      setError("errors.removeFailed");
       return;
     }
     setItems(next);
@@ -265,14 +275,14 @@ function App() {
         <aside className={navOpen ? "sidebar open" : "sidebar"}>
           <button
             className="mobile-close"
-            aria-label="Close navigation"
+            aria-label={t("navigation.close")}
             onClick={() => setNavOpen(false)}
           >
             <X />
           </button>
           <button
             className="brand"
-            title="Everia home"
+            title={t("navigation.everiaHome")}
             onClick={() => navigate("home")}
           >
             <span className="brand-mark">
@@ -286,8 +296,8 @@ function App() {
 
           <nav>
             <button
-              title="Home"
-              aria-label="Home"
+              title={t("navigation.home")}
+              aria-label={t("navigation.home")}
               className="nav-item"
               onClick={() => navigate("home")}
             >
@@ -297,8 +307,8 @@ function App() {
               const Icon = categoryIcons[category];
               return (
                 <button
-                  title={categoryInfo[category].label}
-                  aria-label={categoryInfo[category].label}
+                  title={categoryLabel(category, locale)}
+                  aria-label={categoryLabel(category, locale)}
                   key={category}
                   className={
                     (view === "category" ||
@@ -315,8 +325,8 @@ function App() {
               );
             })}
             <button
-              title="Favorites"
-              aria-label="Favorites"
+              title={t("navigation.favorites")}
+              aria-label={t("navigation.favorites")}
               className={
                 view === "favorites" ||
                 (view === "details" && detailReturnView === "favorites")
@@ -330,8 +340,8 @@ function App() {
           </nav>
 
           <button
-            title="Settings"
-            aria-label="Settings"
+            title={t("navigation.settings")}
+            aria-label={t("navigation.settings")}
             className={
               view === "settings"
                 ? "nav-item active settings-link"
@@ -347,18 +357,18 @@ function App() {
       {navOpen && (
         <button
           className="scrim"
-          aria-label="Close navigation"
+          aria-label={t("navigation.close")}
           onClick={() => setNavOpen(false)}
         />
       )}
 
       <main>
-        {error && <p role="alert">{error}</p>}
+        {error && <p role="alert">{t(error)}</p>}
         {view !== "home" && view !== "details" && (
           <header className="topbar">
             <button
               className="menu-button"
-              aria-label="Open navigation"
+              aria-label={t("navigation.open")}
               onClick={() => setNavOpen(true)}
             >
               <Menu />
@@ -366,15 +376,15 @@ function App() {
             <div className="global-search">
               <Search size={18} />
               <input
-                aria-label="Search your universe"
+                aria-label={t("navigation.search")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search your universe..."
+                placeholder={t("navigation.searchPlaceholder")}
               />
             </div>
             <button className="add-button" onClick={() => setAddOpen(true)}>
               <Plus size={18} />
-              <span>Add item</span>
+              <span>{t("navigation.addItem")}</span>
             </button>
           </header>
         )}
@@ -390,13 +400,13 @@ function App() {
           <LibraryView
             title={
               view === "favorites"
-                ? "Favorites"
-                : categoryInfo[activeCategory].label
+                ? t("navigation.favorites")
+                : categoryLabel(activeCategory, locale)
             }
             subtitle={
               view === "favorites"
-                ? "The stories and worlds you love most."
-                : categoryInfo[activeCategory].eyebrow
+                ? t("favorites.subtitle")
+                : categoryDescription(activeCategory, locale)
             }
             items={currentItems}
             category={view === "favorites" ? undefined : activeCategory}
@@ -423,8 +433,8 @@ function App() {
             item={selected}
             returnLabel={
               detailReturnView === "favorites"
-                ? "Favorites"
-                : categoryInfo[activeCategory].label
+                ? t("navigation.favorites")
+                : categoryLabel(activeCategory, locale)
             }
             onClose={closeDetails}
             onSave={(item) => {
@@ -432,9 +442,7 @@ function App() {
                 upsertItem(item);
                 return true;
               } catch {
-                setError(
-                  "Changes could not be saved. Check storage space and retry.",
-                );
+                setError("errors.changesSave");
                 return false;
               }
             }}
