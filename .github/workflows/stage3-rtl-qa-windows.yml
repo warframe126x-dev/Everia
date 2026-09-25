@@ -690,10 +690,13 @@ jobs:
                 throw new Error(`Incorrect ${locale} sidebar geometry: ${JSON.stringify(layout)}`);
               reports.push({ locale, ...state, layout });
               if (next) await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(next))})`);
+              try { await evaluate("window.close()"); } catch { /* Window may close before CDP replies. */ }
+              for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++) await pause(250);
+              if (child.exitCode === null) throw new Error(`Everia did not close normally after ${locale} smoke`);
             } finally {
               socket?.close();
-              child.kill();
-              await pause(1200);
+              if (child.exitCode === null) child.kill();
+              await pause(500);
             }
           }
           fs.writeFileSync(path.join(process.env.VERIFICATION_DIR, "locale-startup-verification.json"),
