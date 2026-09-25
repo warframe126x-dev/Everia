@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   ExternalLink,
   Heart,
@@ -81,7 +82,9 @@ function Metadata({ item }: { item: MediaItem }) {
       {fields.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          <dd>{value}</dd>
+          <dd dir={label === t("details.yearRelease") ? "ltr" : "auto"}>
+            {value}
+          </dd>
         </div>
       ))}
       {safeLink(item.link) && (
@@ -89,7 +92,8 @@ function Metadata({ item }: { item: MediaItem }) {
           <dt>{t("details.link")}</dt>
           <dd>
             <a href={safeLink(item.link)} target="_blank" rel="noreferrer">
-              {item.linkLabel || t("details.official")} <ExternalLink />
+              <bdi dir="auto">{item.linkLabel || t("details.official")}</bdi>{" "}
+              <ExternalLink />
             </a>
           </dd>
         </div>
@@ -111,7 +115,7 @@ export function DetailPanel({
   onSave: (item: MediaItem) => boolean;
   onDelete: () => void;
 }) {
-  const { locale, t } = useLocalization();
+  const { locale, direction, t } = useLocalization();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item);
   const [coverFile, setCoverFile] = useState<File>();
@@ -161,7 +165,8 @@ export function DetailPanel({
         <header className="detail-actions">
           <div>
             <button className="back-button" onClick={onClose}>
-              <ArrowLeft /> {t("details.backTo", { destination: returnLabel })}
+              {direction === "rtl" ? <ArrowRight /> : <ArrowLeft />}{" "}
+              {t("details.backTo", { destination: returnLabel })}
             </button>
             <button
               className={
@@ -207,7 +212,7 @@ export function DetailPanel({
                       ? subtypeLabel(item.subtype, locale)
                       : categoryLabel(item.category, locale)}
                   </p>
-                  <h2>{item.title}</h2>
+                  <h2 dir="auto">{item.title}</h2>
                 </div>
                 <label className="status-quick">
                   <span>{t("details.status")}</span>
@@ -240,16 +245,18 @@ export function DetailPanel({
               {item.description && (
                 <section className="entry-copy">
                   <h3>{t("details.summary")}</h3>
-                  <p>{item.description}</p>
+                  <p dir="auto">{item.description}</p>
                 </section>
               )}
               <section className="entry-copy notes-display">
                 <h3>{t("details.myNotes")}</h3>
-                <p>{item.notes?.trim() || t("details.noNotes")}</p>
+                <p dir={item.notes?.trim() ? "auto" : undefined}>
+                  {item.notes?.trim() || t("details.noNotes")}
+                </p>
               </section>
               <p className="source-line">
                 {t("details.savedLocally")} ·{" "}
-                {item.source ?? t("editor.manualEntry")}
+                <bdi dir="auto">{item.source ?? t("editor.manualEntry")}</bdi>
               </p>
             </div>
           </div>
@@ -258,7 +265,7 @@ export function DetailPanel({
             <div className="edit-heading">
               <div>
                 <p className="kicker">{t("details.editEntry")}</p>
-                <h2>{item.title}</h2>
+                <h2 dir="auto">{item.title}</h2>
               </div>
               <p>{t("details.saveHint")}</p>
             </div>
@@ -281,6 +288,7 @@ export function DetailPanel({
                 {t("editor.title")}
                 <input
                   required
+                  dir="auto"
                   value={draft.title}
                   onChange={(e) =>
                     setDraft({ ...draft, title: e.target.value })
@@ -338,6 +346,7 @@ export function DetailPanel({
               <label>
                 {creatorDisplayLabel(draft.category, locale)}
                 <input
+                  dir="auto"
                   value={draft.creator ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, creator: e.target.value })
@@ -348,6 +357,7 @@ export function DetailPanel({
                 <label>
                   {contributorDisplayLabel(draft.category, locale)}
                   <input
+                    dir="auto"
                     value={draft.contributors ?? ""}
                     onChange={(e) =>
                       setDraft({ ...draft, contributors: e.target.value })
@@ -358,6 +368,7 @@ export function DetailPanel({
               <label>
                 {t("details.yearRelease")}
                 <input
+                  dir="ltr"
                   value={draft.releaseDate ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, releaseDate: e.target.value })
@@ -367,6 +378,7 @@ export function DetailPanel({
               <label>
                 {t("details.genre")}
                 <input
+                  dir="auto"
                   value={draft.genres?.join(", ") ?? ""}
                   onChange={(e) =>
                     setDraft({
@@ -383,6 +395,7 @@ export function DetailPanel({
                 <label>
                   {t("details.platform")}
                   <input
+                    dir="auto"
                     value={draft.platform ?? ""}
                     onChange={(e) =>
                       setDraft({ ...draft, platform: e.target.value })
@@ -414,6 +427,7 @@ export function DetailPanel({
               <label>
                 {t("details.linkLabel")}
                 <input
+                  dir="auto"
                   value={draft.linkLabel ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, linkLabel: e.target.value })
@@ -425,6 +439,7 @@ export function DetailPanel({
                 {t("details.link")}
                 <input
                   type="url"
+                  dir="ltr"
                   value={draft.link ?? ""}
                   onChange={(e) => setDraft({ ...draft, link: e.target.value })}
                   placeholder="https://"
@@ -441,6 +456,7 @@ export function DetailPanel({
               <label className="wide">
                 {t("details.summary")}
                 <textarea
+                  dir="auto"
                   rows={4}
                   value={draft.description ?? ""}
                   onChange={(e) =>
@@ -451,6 +467,7 @@ export function DetailPanel({
               <label className="wide">
                 {t("details.myNotes")}
                 <textarea
+                  dir="auto"
                   aria-label={t("details.myNotes")}
                   rows={5}
                   value={draft.notes ?? ""}

@@ -1,5 +1,11 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { storage } from "../storage";
 import { locales, type Locale } from "./locale";
 import { LocalizationProvider, useLocalization } from "./Localization";
@@ -16,6 +22,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   document.documentElement.lang = "en";
+  document.documentElement.dir = "ltr";
   vi.restoreAllMocks();
 });
 
@@ -122,7 +129,7 @@ function Probe() {
   );
 }
 
-test("provider loads persisted locale, switches and synchronizes document language across remounts", () => {
+test("provider loads persisted locale and synchronizes document language and direction", () => {
   let app = render(
     <LocalizationProvider>
       <Probe />
@@ -130,6 +137,7 @@ test("provider loads persisted locale, switches and synchronizes document langua
   );
   expect(screen.getByTestId("current").textContent).toBe("en:ltr");
   expect(document.documentElement.lang).toBe("en");
+  expect(document.documentElement.dir).toBe("ltr");
   app.unmount();
   storage.saveLocale("fr");
   app = render(
@@ -139,6 +147,7 @@ test("provider loads persisted locale, switches and synchronizes document langua
   );
   expect(screen.getByTestId("translated").textContent).toBe("Annuler");
   expect(document.documentElement.lang).toBe("fr");
+  expect(document.documentElement.dir).toBe("ltr");
   fireEvent.click(screen.getByRole("button", { name: "Switch to Arabic" }));
   expect(screen.getByTestId("current").textContent).toBe("ar:rtl");
   expect(screen.getByTestId("count").textContent).toBe(
@@ -151,8 +160,7 @@ test("provider loads persisted locale, switches and synchronizes document langua
     formatDate("ar", new Date("2026-09-25T12:00:00Z"), { timeZone: "UTC" }),
   );
   expect(document.documentElement.lang).toBe("ar");
-  // RTL document layout is deliberately deferred to Stage 3.
-  expect(document.documentElement.dir).not.toBe("rtl");
+  expect(document.documentElement.dir).toBe("rtl");
   expect(storage.loadLocale()).toBe("ar");
   app.unmount();
   render(
@@ -161,6 +169,10 @@ test("provider loads persisted locale, switches and synchronizes document langua
     </LocalizationProvider>,
   );
   expect(screen.getByTestId("current").textContent).toBe("ar:rtl");
+  expect(document.documentElement.dir).toBe("rtl");
+  act(() => switchLocale("fr"));
+  expect(document.documentElement.lang).toBe("fr");
+  expect(document.documentElement.dir).toBe("ltr");
 });
 
 test("a failed locale write leaves the current locale active", () => {
@@ -175,4 +187,5 @@ test("a failed locale write leaves the current locale active", () => {
   expect(() => switchLocale("ar")).toThrow("disk full");
   expect(screen.getByTestId("current").textContent).toBe("en:ltr");
   expect(document.documentElement.lang).toBe("en");
+  expect(document.documentElement.dir).toBe("ltr");
 });

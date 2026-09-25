@@ -10,6 +10,7 @@ import {
 } from "./providers";
 import { categories, type Category, type ProviderId } from "./types";
 import { useLocalization } from "./localization/Localization";
+import { isolateBidi } from "./localization/bidi";
 
 type Notice = {
   kind:
@@ -160,11 +161,14 @@ export function OnlineSearch({
         </label>
         <label className="online-query">
           {t("search.providerQuery", {
-            provider: provider?.name ?? t("search.online"),
+            provider: provider
+              ? isolateBidi(provider.name)
+              : t("search.online"),
           })}
           <span>
             <Search />
             <input
+              dir="auto"
               value={query}
               disabled={!available || busy}
               placeholder={t("search.placeholder")}
@@ -192,7 +196,10 @@ export function OnlineSearch({
         <div className="online-message">
           {message.kind === "empty" && message.from && message.to && (
             <p>
-              {t("search.fallback", { from: message.from, to: message.to })}
+              {t("search.fallback", {
+                from: isolateBidi(message.from),
+                to: isolateBidi(message.to),
+              })}
             </p>
           )}
           <p>
@@ -216,7 +223,10 @@ export function OnlineSearch({
                               : message.kind === "details-unavailable"
                                 ? "search.detailsUnavailable"
                                 : "search.unavailable",
-              { from: message.from ?? "", to: message.to ?? "" },
+              {
+                from: message.from ? isolateBidi(message.from) : "",
+                to: message.to ? isolateBidi(message.to) : "",
+              },
             )}
           </p>
           {(category === "games" ||
@@ -256,12 +266,14 @@ export function OnlineSearch({
             />
           )}
           <div>
-            <span className="source-badge">{selected.providerName}</span>
-            <h3>{selected.title}</h3>
+            <span className="source-badge" dir="ltr">
+              {selected.providerName}
+            </span>
+            <h3 dir="auto">{selected.title}</h3>
             {selected.alternateTitle && (
-              <small>{selected.alternateTitle}</small>
+              <small dir="auto">{selected.alternateTitle}</small>
             )}
-            <p>
+            <p dir="auto">
               {[
                 selected.creator,
                 selected.releaseDate,
@@ -273,7 +285,7 @@ export function OnlineSearch({
                 .filter(Boolean)
                 .join(" · ")}
             </p>
-            {selected.description && <p>{selected.description}</p>}
+            {selected.description && <p dir="auto">{selected.description}</p>}
             <button
               type="button"
               className="primary"
@@ -325,9 +337,11 @@ export function OnlineSearch({
                   <span className="result-cover-placeholder" />
                 )}
                 <span>
-                  <small className="source-badge">{result.providerName}</small>
-                  <strong>{result.title}</strong>
-                  <small>
+                  <small className="source-badge" dir="ltr">
+                    {result.providerName}
+                  </small>
+                  <strong dir="auto">{result.title}</strong>
+                  <small dir="auto">
                     {[
                       result.creator,
                       result.releaseDate,
@@ -347,7 +361,7 @@ export function OnlineSearch({
       {resultSource === "rawg" && results.length > 0 && (
         <p className="result-attribution">
           {t("search.rawgAttribution")}{" "}
-          <a href="https://rawg.io/" target="_blank" rel="noreferrer">
+          <a href="https://rawg.io/" target="_blank" rel="noreferrer" dir="ltr">
             RAWG
           </a>
         </p>

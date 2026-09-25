@@ -377,6 +377,7 @@ function App() {
               <Search size={18} />
               <input
                 aria-label={t("navigation.search")}
+                dir="auto"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t("navigation.searchPlaceholder")}

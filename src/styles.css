@@ -38,23 +38,21 @@ body {
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background:
-    linear-gradient(
-        180deg,
-        color-mix(in srgb, #168397 62%, #132c33),
-        color-mix(in srgb, var(--accent) 42%, #17462f)
-      )
-      padding-box;
+  background: linear-gradient(
+      180deg,
+      color-mix(in srgb, #168397 62%, #132c33),
+      color-mix(in srgb, var(--accent) 42%, #17462f)
+    )
+    padding-box;
 }
 *::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:active {
-  background:
-    linear-gradient(
-        180deg,
-        color-mix(in srgb, #1c98ab 72%, #17363d),
-        color-mix(in srgb, var(--accent) 56%, #1b5438)
-      )
-      padding-box;
+  background: linear-gradient(
+      180deg,
+      color-mix(in srgb, #1c98ab 72%, #17363d),
+      color-mix(in srgb, var(--accent) 56%, #1b5438)
+    )
+    padding-box;
   box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 button,
@@ -107,16 +105,17 @@ a:focus-visible {
 main {
   position: relative;
   min-height: 100vh;
-  margin-left: var(--sidebar);
+  margin-inline-start: var(--sidebar);
   isolation: isolate;
 }
 .home-view main {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .interior-art-view main::before {
   content: "";
   position: fixed;
-  inset: 0 0 0 var(--sidebar);
+  inset: 0;
+  inset-inline-start: var(--sidebar);
   z-index: -1;
   pointer-events: none;
   background-image:
@@ -130,14 +129,15 @@ main {
 
 .sidebar {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset-block: 0;
+  inset-inline-start: 0;
   z-index: 30;
   width: var(--sidebar);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 15px 10px 13px;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
   background: rgba(4, 11, 17, 0.94);
   backdrop-filter: blur(18px);
 }
@@ -206,7 +206,7 @@ main {
 .nav-item.active::before {
   content: "";
   position: absolute;
-  left: -12px;
+  inset-inline-start: -12px;
   top: 7px;
   bottom: 7px;
   width: 3px;
@@ -237,7 +237,7 @@ main {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 9px 12px;
   color: #6d7a83;
   border: 1px solid var(--line);
@@ -321,7 +321,8 @@ textarea:focus {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 select {
-  padding: 10px 34px 10px 12px;
+  padding-block: 10px;
+  padding-inline: 12px 34px;
 }
 input,
 textarea {
@@ -514,6 +515,13 @@ textarea {
   width: 20px;
   height: 20px;
 }
+:root[dir="rtl"] .home-intro,
+:root[dir="rtl"] .home-footer em {
+  transform-origin: right center;
+}
+:root[dir="rtl"] .home-footer button {
+  transform-origin: left center;
+}
 
 /* Library */
 .library-page {
@@ -523,8 +531,7 @@ textarea {
 }
 :root[data-responsive-size="expanded"] .library-page {
   max-width: none;
-  margin-left: 0;
-  margin-right: 0;
+  margin-inline: 0;
 }
 .library-heading {
   display: flex;
@@ -606,7 +613,7 @@ textarea {
   color: inherit;
   border: 0;
   background: none;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .cover {
@@ -634,7 +641,7 @@ textarea {
 .favorite-badge {
   position: absolute;
   top: 10px;
-  right: 10px;
+  inset-inline-end: 10px;
   z-index: 2;
   width: 18px;
   color: var(--accent);
@@ -684,7 +691,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 3px;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: #edc664;
   font-weight: 500;
 }
@@ -715,7 +722,8 @@ textarea {
   grid-template-columns: 62px minmax(0, 1fr);
   align-items: center;
   gap: 16px;
-  padding: 9px 16px 9px 9px;
+  padding-block: 9px;
+  padding-inline: 9px 16px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: rgba(8, 17, 23, 0.67);
@@ -916,7 +924,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 11px;
+  padding-inline-start: 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #0a1117;
@@ -975,7 +983,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.02);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .online-results > button:hover {
@@ -1023,7 +1031,7 @@ textarea {
   margin: 10px 2px 0;
   color: #68757e;
   font-size: 8px;
-  text-align: right;
+  text-align: end;
 }
 .result-attribution a,
 .provider-credits a {
@@ -1171,12 +1179,12 @@ textarea {
 }
 .status-select-wrap .status {
   position: absolute;
-  left: 13px;
+  inset-inline-start: 13px;
   z-index: 1;
 }
 .status-select-wrap select {
   min-width: 145px;
-  padding-left: 30px;
+  padding-inline-start: 30px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -1252,9 +1260,14 @@ textarea {
   gap: 11px;
   color: #edc664;
 }
+.rating-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
 .stars {
   display: flex;
   gap: 2px;
+  direction: ltr;
 }
 .star {
   position: relative;
@@ -1322,7 +1335,10 @@ textarea {
   margin: 0;
   color: var(--muted);
   font-size: 11px;
-  text-align: right;
+  text-align: end;
+}
+:root[dir="rtl"] .status-quick {
+  align-items: flex-start;
 }
 .edit-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1380,7 +1396,7 @@ textarea {
   margin: auto;
 }
 .settings-page .page-title {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 .settings-card {
   display: flex;
@@ -1604,7 +1620,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.16);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .background-modes button.active {
@@ -1643,7 +1659,7 @@ textarea {
   color: var(--text);
 }
 .restore-appearance {
-  margin-left: 8px;
+  margin-inline-start: 8px;
 }
 
 @media (min-width: 1180px) {
@@ -1788,6 +1804,9 @@ textarea {
     transform: translateX(-100%);
     transition: 0.22s;
   }
+  :root[dir="rtl"] .sidebar:not(.open) {
+    transform: translateX(100%);
+  }
   .sidebar.open {
     transform: none;
   }
@@ -1799,7 +1818,7 @@ textarea {
     display: grid;
     position: absolute;
     top: 8px;
-    right: 4px;
+    inset-inline-end: 4px;
     place-items: center;
     padding: 6px;
     border: 0;
@@ -1813,7 +1832,7 @@ textarea {
     background: none;
   }
   main {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
   .interior-art-view main::before {
     inset: 0;
@@ -1917,7 +1936,7 @@ textarea {
     flex-direction: column;
   }
   .edit-heading > p {
-    text-align: left;
+    text-align: start;
   }
   .form-grid,
   .edit-grid {

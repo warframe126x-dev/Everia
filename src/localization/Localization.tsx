@@ -13,7 +13,6 @@ import { formatCount, formatDate, formatNumber, translate } from "./format";
 
 type Localization = {
   locale: Locale;
-  /** Stage 3 will apply this direction to the document after RTL layout work. */
   direction: "ltr" | "rtl";
   setLocale: (next: Locale) => void;
   t: typeof translate extends (locale: Locale, ...args: infer A) => string
@@ -40,6 +39,7 @@ export function LocalizationProvider({
   );
   useLayoutEffect(() => {
     document.documentElement.lang = locale;
+    document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
   }, [locale]);
   const setLocale = useCallback((next: Locale) => {
     storage.saveLocale(next);

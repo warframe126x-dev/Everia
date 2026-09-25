@@ -66,7 +66,7 @@ export function SettingsView({
                     setTheme({ ...theme, [key]: e.target.value })
                   }
                 />
-                <code>{theme[key]}</code>
+                <code dir="ltr">{theme[key]}</code>
               </label>
             ))}
           </div>
@@ -173,7 +173,7 @@ export function SettingsView({
             </label>
             <label>
               {t("settings.dimming")}{" "}
-              <strong>{theme.backgroundDimming}%</strong>
+              <strong dir="ltr">{theme.backgroundDimming}%</strong>
               <input
                 aria-label={t("settings.dimming")}
                 type="range"
@@ -225,7 +225,12 @@ export function SettingsView({
             <p className="tmdb-notice">{t("settings.tmdbNotice")}</p>
             <p>
               {t("settings.rawgIntro")}{" "}
-              <a href="https://rawg.io/" target="_blank" rel="noreferrer">
+              <a
+                href="https://rawg.io/"
+                target="_blank"
+                rel="noreferrer"
+                dir="ltr"
+              >
                 RAWG
               </a>
               {t("settings.omdbIntro")}{" "}
@@ -233,6 +238,7 @@ export function SettingsView({
                 href="https://creativecommons.org/licenses/by-nc/4.0/"
                 target="_blank"
                 rel="noreferrer"
+                dir="ltr"
               >
                 CC BY-NC 4.0
               </a>

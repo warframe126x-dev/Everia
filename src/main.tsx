@@ -12,6 +12,7 @@ async function start() {
     await recoverPendingRestore();
     const locale = storage.loadLocale();
     document.documentElement.lang = locale;
+    document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
     createRoot(document.getElementById("root")!).render(
       <StrictMode>
         <LocalizationProvider initialLocale={locale}>

@@ -5,6 +5,7 @@ import type {
 } from "./providers/types";
 import type { ProviderId } from "./types";
 import { useLocalization } from "./localization/Localization";
+import { isolateBidi } from "./localization/bidi";
 import type { StringKey } from "./localization/format";
 
 const categoryKeys: Record<ProviderId, StringKey> = {
@@ -164,7 +165,7 @@ export function OnlineSourcesSettings() {
           <div className="provider-setting-heading">
             <div>
               <div className="provider-name-row">
-                <h3>{provider.name}</h3>
+                <h3 dir="ltr">{provider.name}</h3>
                 <span className={`provider-role ${provider.role}`}>
                   {t(
                     provider.role === "primary"
@@ -181,7 +182,9 @@ export function OnlineSourcesSettings() {
           </div>
           {provider.reasonCode && provider.reasonCode !== "not-configured" && (
             <p className="no-configuration">
-              {t(failureKey(provider.reasonCode), { provider: provider.name })}
+              {t(failureKey(provider.reasonCode), {
+                provider: isolateBidi(provider.name),
+              })}
             </p>
           )}
           {provider.id === "igdb" && (
@@ -190,6 +193,7 @@ export function OnlineSourcesSettings() {
                 {t("providers.clientId")}
                 <input
                   ref={igdbClientId}
+                  dir="ltr"
                   defaultValue=""
                   placeholder={
                     provider.clientIdHint || t("providers.twitchClientId")
@@ -201,6 +205,7 @@ export function OnlineSourcesSettings() {
                 {t("providers.clientSecret")}
                 <input
                   ref={igdbSecret}
+                  dir="ltr"
                   type="password"
                   placeholder={
                     provider.configured
@@ -218,6 +223,7 @@ export function OnlineSourcesSettings() {
                 {t("providers.readToken")}
                 <input
                   ref={tmdbToken}
+                  dir="ltr"
                   type="password"
                   placeholder={
                     provider.configured
@@ -235,6 +241,7 @@ export function OnlineSourcesSettings() {
                 {t("providers.apiKey")}
                 <input
                   ref={provider.id === "rawg" ? rawgKey : omdbKey}
+                  dir="ltr"
                   type="password"
                   placeholder={
                     provider.configured
@@ -323,7 +330,9 @@ export function OnlineSourcesSettings() {
       ))}
       {message && (
         <p className="provider-message" role="status">
-          {t(message.key, { provider: message.provider ?? "" })}
+          {t(message.key, {
+            provider: message.provider ? isolateBidi(message.provider) : "",
+          })}
         </p>
       )}
     </div>

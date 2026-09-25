@@ -3,6 +3,7 @@ import { FormEvent, useState } from "react";
 import { Check, X } from "lucide-react";
 import { categoryLabel, subtypeLabel } from "./data";
 import { useLocalization } from "./localization/Localization";
+import { isolateBidi } from "./localization/bidi";
 import { statusOptions } from "./mediaConfig";
 
 import { Cover } from "./Cover";
@@ -119,7 +120,9 @@ export function ItemEditor({
           <>
             {importedNotice && (
               <p className="imported-notice">
-                {t("editor.importedNotice", { provider: importedNotice })}
+                {t("editor.importedNotice", {
+                  provider: isolateBidi(importedNotice),
+                })}
               </p>
             )}
             <div className="form-grid">
@@ -141,6 +144,7 @@ export function ItemEditor({
                 <input
                   autoFocus
                   required
+                  dir="auto"
                   value={draft.title}
                   onChange={(e) =>
                     setDraft({ ...draft, title: e.target.value })
@@ -212,6 +216,7 @@ export function ItemEditor({
               <label>
                 {t("editor.authorCreator")}
                 <input
+                  dir="auto"
                   value={draft.creator}
                   onChange={(e) =>
                     setDraft({ ...draft, creator: e.target.value })
@@ -222,6 +227,7 @@ export function ItemEditor({
               <label>
                 {t("library.releaseDate")}
                 <input
+                  dir="ltr"
                   value={draft.releaseDate}
                   onChange={(e) =>
                     setDraft({ ...draft, releaseDate: e.target.value })
@@ -232,6 +238,7 @@ export function ItemEditor({
               <label>
                 {t("details.genre")}
                 <input
+                  dir="auto"
                   value={draft.genres?.join(", ") ?? ""}
                   onChange={(e) =>
                     setDraft({
@@ -249,6 +256,7 @@ export function ItemEditor({
                 <label>
                   {t("details.platform")}
                   <input
+                    dir="auto"
                     value={draft.platform ?? ""}
                     onChange={(e) =>
                       setDraft({ ...draft, platform: e.target.value })
@@ -270,6 +278,7 @@ export function ItemEditor({
                           : t("details.chapters")}
                   <input
                     type="number"
+                    dir="ltr"
                     min="0"
                     value={
                       draft.category === "movies"
@@ -331,6 +340,7 @@ export function ItemEditor({
                 {t("editor.rating")}
                 <input
                   type="number"
+                  dir="ltr"
                   min="1"
                   max="10"
                   value={draft.rating ?? ""}
@@ -348,6 +358,7 @@ export function ItemEditor({
               <label className="wide">
                 {t("editor.coverUrl")}
                 <input
+                  dir="ltr"
                   value={draft.coverUrl ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, coverUrl: e.target.value })
@@ -358,6 +369,7 @@ export function ItemEditor({
               <label className="wide">
                 {t("editor.description")}
                 <textarea
+                  dir="auto"
                   rows={3}
                   value={draft.description}
                   onChange={(e) =>
@@ -369,6 +381,7 @@ export function ItemEditor({
               <label className="wide">
                 {t("details.myNotes")}
                 <textarea
+                  dir="auto"
                   rows={3}
                   value={draft.notes}
                   onChange={(e) =>

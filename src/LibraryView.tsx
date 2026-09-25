@@ -118,8 +118,10 @@ export function LibraryView({
                     ? subtypeLabel(item.subtype, locale)
                     : categoryLabel(item.category, locale)}
                 </small>
-                <strong>{item.title}</strong>
-                <span>{item.creator || t("library.unknownCreator")}</span>
+                <strong dir="auto">{item.title}</strong>
+                <span dir="auto">
+                  {item.creator || t("library.unknownCreator")}
+                </span>
                 <div className="media-meta">
                   <i
                     className={`status ${item.status.toLowerCase().replace(" ", "-")}`}
@@ -128,7 +130,7 @@ export function LibraryView({
                   {item.rating !== undefined && (
                     <b>
                       <Star size={13} fill="currentColor" />{" "}
-                      {number(item.rating)}/10
+                      <bdi dir="ltr">{number(item.rating)}/10</bdi>
                     </b>
                   )}
                 </div>

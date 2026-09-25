@@ -1,4 +1,6 @@
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
+import { createElement } from "react";
+import { cleanup, render } from "@testing-library/react";
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
 import { Blob as NodeBlob } from "node:buffer";
@@ -13,6 +15,23 @@ import {
   BackupFailure,
 } from "./backup";
 import { exportAssets, replaceAssets } from "./covers";
+import {
+  LocalizationProvider,
+  useLocalization,
+} from "./localization/Localization";
+
+function LocaleProbe() {
+  return createElement("span", null, useLocalization().locale);
+}
+function assertRestoredDirection(locale: "en" | "fr" | "ar") {
+  const mounted = render(
+    createElement(LocalizationProvider, null, createElement(LocaleProbe)),
+  );
+  expect(mounted.container.textContent).toBe(locale);
+  expect(document.documentElement.lang).toBe(locale);
+  expect(document.documentElement.dir).toBe(locale === "ar" ? "rtl" : "ltr");
+  mounted.unmount();
+}
 
 const item = (id: string, category = "games") => ({
   id,
@@ -87,6 +106,7 @@ beforeEach(async () => {
   };
 });
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   delete window.everiaBackup;
@@ -229,6 +249,7 @@ test("schema 1 restore leaves current locale unchanged, including exact raw repr
   localStorage.setItem("everia.locale.v1", '"ar"');
   await restoreBackup(old);
   expect(localStorage.getItem("everia.locale.v1")).toBe('"ar"');
+  assertRestoredDirection("ar");
   expect(JSON.parse(localStorage.getItem("everia.items.v1")!)).toHaveLength(2);
   expect((await exportAssets()).length).toBe(2);
 });
@@ -239,10 +260,12 @@ test("schema 2 restores locale and failed commit or interrupted restore rolls it
   localStorage.setItem("everia.locale.v1", '"ar"');
   await restoreBackup(incoming);
   expect(localStorage.getItem("everia.locale.v1")).toBe('"fr"');
+  assertRestoredDirection("fr");
   localStorage.setItem("everia.locale.v1", '"ar"');
   failFinish = true;
   await expect(restoreBackup(incoming)).rejects.toThrow(/injected/);
   expect(localStorage.getItem("everia.locale.v1")).toBe('"ar"');
+  assertRestoredDirection("ar");
   expect(pending).toBeNull();
   const previous = await createBackup("1.0.0");
   await window.everiaBackup!.beginRestore({
@@ -252,6 +275,17 @@ test("schema 2 restores locale and failed commit or interrupted restore rolls it
   localStorage.setItem("everia.locale.v1", '"fr"');
   await recoverPendingRestore();
   expect(localStorage.getItem("everia.locale.v1")).toBe('"ar"');
+  assertRestoredDirection("ar");
+});
+test("schema 2 restored English and Arabic establish their document directions", async () => {
+  await populate();
+  for (const locale of ["en", "ar"] as const) {
+    localStorage.setItem("everia.locale.v1", JSON.stringify(locale));
+    const backup = await createBackup("1.0.0");
+    localStorage.setItem("everia.locale.v1", '"fr"');
+    await restoreBackup(backup);
+    assertRestoredDirection(locale);
+  }
 });
 test("schema 2 locale write failure and locale read-back mismatch restore exact prior bytes", async () => {
   await populate();

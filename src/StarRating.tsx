@@ -57,7 +57,10 @@ export function StarRating({
           );
         })}
       </div>
-      <strong>
+      <strong
+        className={rating ? "rating-value" : undefined}
+        dir={rating ? "ltr" : undefined}
+      >
         {rating ? `${number(rating)}/10` : t("accessibility.notRated")}
       </strong>
       {editable && rating && (

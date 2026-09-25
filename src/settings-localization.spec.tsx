@@ -97,6 +97,23 @@ for (const locale of ["en", "fr", "ar"] as const) {
       screen.getByLabelText(translate(locale, "settings.dimming")),
     ).toBeDefined();
     expect(await screen.findByRole("heading", { name: "IGDB" })).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "IGDB" }).getAttribute("dir"),
+    ).toBe("ltr");
+    expect(
+      (
+        screen.getByLabelText(
+          translate(locale, "providers.clientId"),
+        ) as HTMLInputElement
+      ).dir,
+    ).toBe("ltr");
+    expect(
+      (
+        screen.getByLabelText(
+          translate(locale, "providers.clientSecret"),
+        ) as HTMLInputElement
+      ).dir,
+    ).toBe("ltr");
     expect(screen.getByRole("heading", { name: "RAWG" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Jikan" })).toBeDefined();
     expect(
@@ -126,13 +143,14 @@ test("language selector persists only semantic locale values and updates Setting
   fireEvent.change(select, { target: { value: "fr" } });
   expect(localStorage.getItem("everia.locale.v1")).toBe('"fr"');
   expect(document.documentElement.lang).toBe("fr");
+  expect(document.documentElement.dir).toBe("ltr");
   expect(screen.getByRole("heading", { name: "Apparence" })).toBeDefined();
   fireEvent.change(screen.getByLabelText("Langue"), {
     target: { value: "ar" },
   });
   expect(localStorage.getItem("everia.locale.v1")).toBe('"ar"');
   expect(document.documentElement.lang).toBe("ar");
-  expect(document.documentElement.dir).not.toBe("rtl"); // Stage 3 owns direction/layout.
+  expect(document.documentElement.dir).toBe("rtl");
 });
 
 test("credential error code localizes without rendering diagnostic or altering secret", async () => {
