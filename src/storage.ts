@@ -1,11 +1,13 @@
 import { defaultTheme } from "./data";
 import { validateItems } from "./validation";
 import type { MediaItem, SortKey, ThemeSettings, ViewMode } from "./types";
+import { isLocale, type Locale } from "./localization/locale";
 
 const ITEMS_KEY = "everia.items.v1";
 const THEME_KEY = "everia.theme.v1";
 const SORT_KEY = "everia.sort.v1";
 const VIEW_KEY = "everia.views.v1";
+const LOCALE_KEY = "everia.locale.v1";
 
 const blocked = new Set<string>();
 export let storageWarning = "";
@@ -26,6 +28,20 @@ function write(key: string, value: unknown) {
 }
 
 export const storage = {
+  loadLocale: (): Locale => {
+    // A bad preference must never block startup or mark the library as damaged.
+    try {
+      const raw = localStorage.getItem(LOCALE_KEY);
+      const value: unknown = raw === null ? undefined : JSON.parse(raw);
+      return isLocale(value) ? value : "en";
+    } catch {
+      return "en";
+    }
+  },
+  saveLocale: (locale: Locale) => {
+    if (!isLocale(locale)) throw new Error("Unsupported locale.");
+    localStorage.setItem(LOCALE_KEY, JSON.stringify(locale));
+  },
   loadItems: () => read<MediaItem[]>(ITEMS_KEY, [], validateItems),
   saveItems: (items: MediaItem[]) => write(ITEMS_KEY, validateItems(items)),
   loadTheme: () =>
