@@ -7,10 +7,15 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { categoryInfo } from "./data";
+import { categoryLabel, subtypeLabel } from "./data";
 import { Cover } from "./Cover";
 import { storeCover } from "./covers";
-import { contributorLabel, creatorLabel, statusOptions } from "./mediaConfig";
+import {
+  contributorDisplayLabel,
+  creatorDisplayLabel,
+  statusOptions,
+} from "./mediaConfig";
+import { useLocalization } from "./localization/Localization";
 import { StarRating } from "./StarRating";
 import {
   categories,
@@ -30,27 +35,45 @@ function safeLink(value?: string) {
 }
 
 function Metadata({ item }: { item: MediaItem }) {
+  const { locale, t, number } = useLocalization();
   const fourth =
     item.category === "games"
-      ? ["Platform", item.platform]
+      ? [t("details.platform"), item.platform]
       : item.category === "movies"
         ? [
-            "Runtime",
+            t("details.runtime"),
             item.providerMetadata?.runtimeMinutes
-              ? `${item.providerMetadata.runtimeMinutes} min`
+              ? t("details.minutes", {
+                  count: number(item.providerMetadata.runtimeMinutes),
+                })
               : undefined,
           ]
         : item.category === "tv-series"
-          ? ["Seasons", item.providerMetadata?.seasons?.toString()]
+          ? [
+              t("details.seasons"),
+              item.providerMetadata?.seasons === undefined
+                ? undefined
+                : number(item.providerMetadata.seasons),
+            ]
           : item.category === "anime"
-            ? ["Episodes", item.providerMetadata?.episodes?.toString()]
+            ? [
+                t("details.episodes"),
+                item.providerMetadata?.episodes === undefined
+                  ? undefined
+                  : number(item.providerMetadata.episodes),
+              ]
             : item.providerMetadata?.volumes !== undefined
-              ? ["Volumes", item.providerMetadata.volumes.toString()]
-              : ["Chapters", item.providerMetadata?.chapters?.toString()];
+              ? [t("details.volumes"), number(item.providerMetadata.volumes)]
+              : [
+                  t("details.chapters"),
+                  item.providerMetadata?.chapters === undefined
+                    ? undefined
+                    : number(item.providerMetadata.chapters),
+                ];
   const fields = [
-    [creatorLabel[item.category], item.creator],
-    ["Genre", item.genres?.join(", ")],
-    ["Year / Release", item.releaseDate],
+    [creatorDisplayLabel(item.category, locale), item.creator],
+    [t("details.genre"), item.genres?.join(", ")],
+    [t("details.yearRelease"), item.releaseDate],
     fourth,
   ].filter((field): field is [string, string] => Boolean(field[0] && field[1]));
   return (
@@ -63,10 +86,10 @@ function Metadata({ item }: { item: MediaItem }) {
       ))}
       {safeLink(item.link) && (
         <div>
-          <dt>Link</dt>
+          <dt>{t("details.link")}</dt>
           <dd>
             <a href={safeLink(item.link)} target="_blank" rel="noreferrer">
-              {item.linkLabel || "Official"} <ExternalLink />
+              {item.linkLabel || t("details.official")} <ExternalLink />
             </a>
           </dd>
         </div>
@@ -88,6 +111,7 @@ export function DetailPanel({
   onSave: (item: MediaItem) => boolean;
   onDelete: () => void;
 }) {
+  const { locale, t } = useLocalization();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item);
   const [coverFile, setCoverFile] = useState<File>();
@@ -120,16 +144,12 @@ export function DetailPanel({
       else if (coverUrl && !coverUrl.startsWith("local-cover:"))
         coverUrl = await storeCover(coverUrl);
       if (!onSave({ ...draft, title: draft.title.trim(), coverUrl })) {
-        setError("Changes could not be saved. Check storage space and retry.");
+        setError("errors.changesSave");
         return;
       }
       setEditing(false);
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Changes could not be saved.",
-      );
+    } catch {
+      setError("errors.changesSave");
     } finally {
       setBusy(false);
     }
@@ -137,11 +157,11 @@ export function DetailPanel({
 
   return (
     <div className="detail-page">
-      <article className="detail-panel" aria-label="Entry details">
+      <article className="detail-panel" aria-label={t("details.entryDetails")}>
         <header className="detail-actions">
           <div>
             <button className="back-button" onClick={onClose}>
-              <ArrowLeft /> Back to {returnLabel}
+              <ArrowLeft /> {t("details.backTo", { destination: returnLabel })}
             </button>
             <button
               className={
@@ -150,7 +170,9 @@ export function DetailPanel({
                   : "icon-button favorite"
               }
               aria-label={
-                item.favorite ? "Remove from favorites" : "Add to favorites"
+                item.favorite
+                  ? t("details.removeFavorite")
+                  : t("details.addFavorite")
               }
               onClick={() => onSave({ ...item, favorite: !item.favorite })}
             >
@@ -160,7 +182,7 @@ export function DetailPanel({
           <div>
             {!editing && (
               <button className="secondary edit-button" onClick={beginEdit}>
-                <Pencil /> Edit
+                <Pencil /> {t("details.edit")}
               </button>
             )}
           </div>
@@ -173,7 +195,7 @@ export function DetailPanel({
                 <Cover item={item} detail />
               </div>
               <section className="poster-rating">
-                <span>My rating</span>
+                <span>{t("details.myRating")}</span>
                 <StarRating rating={item.rating} />
               </section>
             </div>
@@ -181,18 +203,20 @@ export function DetailPanel({
               <div className="entry-title-row">
                 <div>
                   <p className="kicker">
-                    {item.subtype ?? categoryInfo[item.category].label}
+                    {item.subtype
+                      ? subtypeLabel(item.subtype, locale)
+                      : categoryLabel(item.category, locale)}
                   </p>
                   <h2>{item.title}</h2>
                 </div>
                 <label className="status-quick">
-                  <span>Status</span>
+                  <span>{t("details.status")}</span>
                   <span className="status-select-wrap">
                     <i
                       className={`status ${item.status.toLowerCase().replace(" ", "-")}`}
                     />
                     <select
-                      aria-label="Status"
+                      aria-label={t("details.status")}
                       value={item.status}
                       onChange={(event) =>
                         onSave({
@@ -201,11 +225,13 @@ export function DetailPanel({
                         })
                       }
                     >
-                      {statusOptions(item.category).map(({ value, label }) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
+                      {statusOptions(item.category, locale).map(
+                        ({ value, label }) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ),
+                      )}
                     </select>
                   </span>
                 </label>
@@ -213,16 +239,17 @@ export function DetailPanel({
               <Metadata item={item} />
               {item.description && (
                 <section className="entry-copy">
-                  <h3>Summary</h3>
+                  <h3>{t("details.summary")}</h3>
                   <p>{item.description}</p>
                 </section>
               )}
               <section className="entry-copy notes-display">
-                <h3>My notes</h3>
-                <p>{item.notes?.trim() || "No personal notes yet."}</p>
+                <h3>{t("details.myNotes")}</h3>
+                <p>{item.notes?.trim() || t("details.noNotes")}</p>
               </section>
               <p className="source-line">
-                Saved locally · {item.source ?? "Manual entry"}
+                {t("details.savedLocally")} ·{" "}
+                {item.source ?? t("editor.manualEntry")}
               </p>
             </div>
           </div>
@@ -230,26 +257,28 @@ export function DetailPanel({
           <form className="detail-edit" onSubmit={submit}>
             <div className="edit-heading">
               <div>
-                <p className="kicker">EDIT ENTRY</p>
+                <p className="kicker">{t("details.editEntry")}</p>
                 <h2>{item.title}</h2>
               </div>
-              <p>Changes are stored only when you choose Save Changes.</p>
+              <p>{t("details.saveHint")}</p>
             </div>
-            {error && <p role="alert">{error}</p>}
+            {error && <p role="alert">{t("errors.changesSave")}</p>}
             <div className="edit-grid">
               <label className="wide">
-                Replace cover
+                {t("details.replaceCover")}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
                   onChange={(e) => setCoverFile(e.target.files?.[0])}
                 />
                 {coverFile && (
-                  <small>{coverFile.name} will be copied into Everia.</small>
+                  <small>
+                    {t("details.coverCopied", { filename: coverFile.name })}
+                  </small>
                 )}
               </label>
               <label className="wide">
-                Title
+                {t("editor.title")}
                 <input
                   required
                   value={draft.title}
@@ -259,7 +288,7 @@ export function DetailPanel({
                 />
               </label>
               <label>
-                Category
+                {t("editor.category")}
                 <select
                   value={draft.category}
                   onChange={(e) =>
@@ -272,14 +301,14 @@ export function DetailPanel({
                 >
                   {categories.map((category) => (
                     <option key={category} value={category}>
-                      {categoryInfo[category].label}
+                      {categoryLabel(category, locale)}
                     </option>
                   ))}
                 </select>
               </label>
               {(draft.category === "novels" || draft.category === "manga") && (
                 <label>
-                  Type
+                  {t("editor.type")}
                   <select
                     value={
                       draft.subtype ??
@@ -296,13 +325,18 @@ export function DetailPanel({
                       ? ["Novel", "Light Novel", "Web Novel"]
                       : ["Manga", "Manhwa", "Manhua"]
                     ).map((value) => (
-                      <option key={value}>{value}</option>
+                      <option key={value} value={value}>
+                        {subtypeLabel(
+                          value as NonNullable<MediaItem["subtype"]>,
+                          locale,
+                        )}
+                      </option>
                     ))}
                   </select>
                 </label>
               )}
               <label>
-                {creatorLabel[draft.category]}
+                {creatorDisplayLabel(draft.category, locale)}
                 <input
                   value={draft.creator ?? ""}
                   onChange={(e) =>
@@ -310,9 +344,9 @@ export function DetailPanel({
                   }
                 />
               </label>
-              {contributorLabel[draft.category] && (
+              {contributorDisplayLabel(draft.category, locale) && (
                 <label>
-                  {contributorLabel[draft.category]}
+                  {contributorDisplayLabel(draft.category, locale)}
                   <input
                     value={draft.contributors ?? ""}
                     onChange={(e) =>
@@ -322,7 +356,7 @@ export function DetailPanel({
                 </label>
               )}
               <label>
-                Year / Release
+                {t("details.yearRelease")}
                 <input
                   value={draft.releaseDate ?? ""}
                   onChange={(e) =>
@@ -331,7 +365,7 @@ export function DetailPanel({
                 />
               </label>
               <label>
-                Genre
+                {t("details.genre")}
                 <input
                   value={draft.genres?.join(", ") ?? ""}
                   onChange={(e) =>
@@ -347,7 +381,7 @@ export function DetailPanel({
               </label>
               {draft.category === "games" && (
                 <label>
-                  Platform
+                  {t("details.platform")}
                   <input
                     value={draft.platform ?? ""}
                     onChange={(e) =>
@@ -357,9 +391,9 @@ export function DetailPanel({
                 </label>
               )}
               <label>
-                Status
+                {t("details.status")}
                 <select
-                  aria-label="Status"
+                  aria-label={t("details.status")}
                   value={draft.status}
                   onChange={(e) =>
                     setDraft({
@@ -368,25 +402,27 @@ export function DetailPanel({
                     })
                   }
                 >
-                  {statusOptions(draft.category).map(({ value, label }) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
+                  {statusOptions(draft.category, locale).map(
+                    ({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
               <label>
-                Link label
+                {t("details.linkLabel")}
                 <input
                   value={draft.linkLabel ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, linkLabel: e.target.value })
                   }
-                  placeholder="Official"
+                  placeholder={t("details.official")}
                 />
               </label>
               <label className="wide">
-                Link
+                {t("details.link")}
                 <input
                   type="url"
                   value={draft.link ?? ""}
@@ -395,7 +431,7 @@ export function DetailPanel({
                 />
               </label>
               <fieldset className="wide rating-editor">
-                <legend>My rating</legend>
+                <legend>{t("details.myRating")}</legend>
                 <StarRating
                   editable
                   rating={draft.rating}
@@ -403,7 +439,7 @@ export function DetailPanel({
                 />
               </fieldset>
               <label className="wide">
-                Summary
+                {t("details.summary")}
                 <textarea
                   rows={4}
                   value={draft.description ?? ""}
@@ -413,9 +449,9 @@ export function DetailPanel({
                 />
               </label>
               <label className="wide">
-                My notes
+                {t("details.myNotes")}
                 <textarea
-                  aria-label="My notes"
+                  aria-label={t("details.myNotes")}
                   rows={5}
                   value={draft.notes ?? ""}
                   onChange={(e) =>
@@ -430,7 +466,7 @@ export function DetailPanel({
                 className="delete-button"
                 onClick={onDelete}
               >
-                <Trash2 /> Remove from Everia
+                <Trash2 /> {t("details.remove")}
               </button>
               <div>
                 <button
@@ -439,10 +475,11 @@ export function DetailPanel({
                   onClick={cancelEdit}
                   disabled={busy}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button className="primary" disabled={busy}>
-                  <Check /> {busy ? "Saving…" : "Save Changes"}
+                  <Check />{" "}
+                  {busy ? t("details.saving") : t("details.saveChanges")}
                 </button>
               </div>
             </footer>

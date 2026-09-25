@@ -1,5 +1,6 @@
 import type { Category, MediaItem, ProviderId } from "../types";
 import { DesktopProvider } from "./desktopProvider";
+import { ProviderSearchError } from "./searchError";
 import type {
   ImportCandidate,
   MediaProvider,
@@ -41,15 +42,15 @@ export async function searchProviderChain(
   query: string,
   category: Category,
 ): Promise<ProviderSearchResult> {
-  if (!window.everiaProviders)
-    throw new Error("Online search is available in the Everia desktop app.");
+  if (!window.everiaProviders) throw new ProviderSearchError("desktop-only");
   const response = await window.everiaProviders.searchChain({
     query,
     category,
   });
   if (!response.ok || !response.data)
-    throw new Error(
-      response.error ?? "Online sources are temporarily unavailable.",
+    throw new ProviderSearchError(
+      response.errorCode ?? "unavailable",
+      response.error,
     );
   return response.data;
 }
@@ -92,3 +93,4 @@ export function candidateToDraft(
 }
 
 export type { ImportCandidate, MediaProvider } from "./types";
+export { ProviderSearchError } from "./searchError";

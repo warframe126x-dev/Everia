@@ -1,7 +1,9 @@
 import { useDialog } from "./useDialog";
 import { FormEvent, useState } from "react";
 import { Check, X } from "lucide-react";
-import { categoryInfo } from "./data";
+import { categoryLabel, subtypeLabel } from "./data";
+import { useLocalization } from "./localization/Localization";
+import { statusOptions } from "./mediaConfig";
 
 import { Cover } from "./Cover";
 import { storeCover } from "./covers";
@@ -15,14 +17,6 @@ import {
   type ReadingStatus,
 } from "./types";
 
-const statuses: ReadingStatus[] = [
-  "Planning",
-  "In progress",
-  "Completed",
-  "On hold",
-  "Dropped",
-];
-
 export function ItemEditor({
   initial,
   onClose,
@@ -34,13 +28,14 @@ export function ItemEditor({
   onSave: (item: MediaItem) => void;
   onConfigure: () => void;
 }) {
+  const { locale, t } = useLocalization();
   const dialogRef = useDialog(onClose);
   const [draft, setDraft] = useState(initial);
   const [imageFile, setImageFile] = useState<File>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"online" | "manual">("online");
-  const [importedNotice, setImportedNotice] = useState("");
+  const [importedNotice, setImportedNotice] = useState<string>();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (mode !== "manual" || !draft.title.trim()) return;
@@ -57,12 +52,8 @@ export function ItemEditor({
         id: crypto.randomUUID(),
         dateAdded: new Date().toISOString(),
       });
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Could not save. Try a local image file.",
-      );
+    } catch {
+      setError("errors.entrySave");
     } finally {
       setBusy(false);
     }
@@ -72,34 +63,43 @@ export function ItemEditor({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Add an entry"
+      aria-label={t("editor.addEntry")}
       className="modal-layer"
     >
-      <button className="modal-scrim" aria-label="Close" onClick={onClose} />
+      <button
+        className="modal-scrim"
+        aria-label={t("navigation.close")}
+        onClick={onClose}
+      />
       <form className="editor-modal" onSubmit={submit}>
         <div className="modal-header">
           <div>
-            <p className="kicker">NEW ENTRY</p>
-            <h2>Add to Everia</h2>
+            <p className="kicker">{t("editor.newEntry")}</p>
+            <h2>{t("editor.addToEveria")}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t("navigation.close")}
+            onClick={onClose}
+          >
             <X />
           </button>
         </div>
-        <div className="add-mode-toggle" aria-label="Add entry method">
+        <div className="add-mode-toggle" aria-label={t("editor.addMethod")}>
           <button
             type="button"
             className={mode === "online" ? "active" : ""}
             onClick={() => setMode("online")}
           >
-            Online search
+            {t("editor.onlineSearch")}
           </button>
           <button
             type="button"
             className={mode === "manual" ? "active" : ""}
             onClick={() => setMode("manual")}
           >
-            Manual entry
+            {t("editor.manualEntry")}
           </button>
         </div>
         {mode === "online" ? (
@@ -110,27 +110,26 @@ export function ItemEditor({
             }
             onUse={(candidate) => {
               setDraft(candidateToDraft(candidate));
-              setImportedNotice(
-                `${candidate.providerName} metadata loaded. Review it before saving your local Everia entry.`,
-              );
+              setImportedNotice(candidate.providerName);
               setMode("manual");
             }}
             onConfigure={onConfigure}
-            onManual={() => setMode("manual")}
           />
         ) : (
           <>
             {importedNotice && (
-              <p className="imported-notice">{importedNotice}</p>
+              <p className="imported-notice">
+                {t("editor.importedNotice", { provider: importedNotice })}
+              </p>
             )}
             <div className="form-grid">
               {error && (
                 <p role="alert" className="wide">
-                  {error}
+                  {t("errors.entrySave")}
                 </p>
               )}
               <label className="wide">
-                Local cover image
+                {t("editor.localCover")}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
@@ -138,7 +137,7 @@ export function ItemEditor({
                 />
               </label>
               <label className="wide">
-                Title
+                {t("editor.title")}
                 <input
                   autoFocus
                   required
@@ -146,11 +145,11 @@ export function ItemEditor({
                   onChange={(e) =>
                     setDraft({ ...draft, title: e.target.value })
                   }
-                  placeholder="Title"
+                  placeholder={t("editor.title")}
                 />
               </label>
               <label>
-                Category
+                {t("editor.category")}
                 <select
                   value={draft.category}
                   onChange={(e) =>
@@ -163,14 +162,14 @@ export function ItemEditor({
                 >
                   {categories.map((c) => (
                     <option key={c} value={c}>
-                      {categoryInfo[c].label}
+                      {categoryLabel(c, locale)}
                     </option>
                   ))}
                 </select>
               </label>
               {draft.category === "manga" && (
                 <label>
-                  Type
+                  {t("editor.type")}
                   <select
                     value={draft.subtype ?? "Manga"}
                     onChange={(e) =>
@@ -180,15 +179,17 @@ export function ItemEditor({
                       })
                     }
                   >
-                    <option>Manga</option>
-                    <option>Manhwa</option>
-                    <option>Manhua</option>
+                    {(["Manga", "Manhwa", "Manhua"] as const).map((value) => (
+                      <option key={value} value={value}>
+                        {subtypeLabel(value, locale)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               )}
               {draft.category === "novels" && (
                 <label>
-                  Type
+                  {t("editor.type")}
                   <select
                     value={draft.subtype ?? "Novel"}
                     onChange={(e) =>
@@ -198,34 +199,38 @@ export function ItemEditor({
                       })
                     }
                   >
-                    <option>Novel</option>
-                    <option>Light Novel</option>
-                    <option>Web Novel</option>
+                    {(["Novel", "Light Novel", "Web Novel"] as const).map(
+                      (value) => (
+                        <option key={value} value={value}>
+                          {subtypeLabel(value, locale)}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
               )}
               <label>
-                Author / creator
+                {t("editor.authorCreator")}
                 <input
                   value={draft.creator}
                   onChange={(e) =>
                     setDraft({ ...draft, creator: e.target.value })
                   }
-                  placeholder="Optional"
+                  placeholder={t("editor.optional")}
                 />
               </label>
               <label>
-                Release date
+                {t("library.releaseDate")}
                 <input
                   value={draft.releaseDate}
                   onChange={(e) =>
                     setDraft({ ...draft, releaseDate: e.target.value })
                   }
-                  placeholder="2024 or 2024-05-12"
+                  placeholder={t("editor.releaseExample")}
                 />
               </label>
               <label>
-                Genre
+                {t("details.genre")}
                 <input
                   value={draft.genres?.join(", ") ?? ""}
                   onChange={(e) =>
@@ -237,32 +242,32 @@ export function ItemEditor({
                         .filter(Boolean),
                     })
                   }
-                  placeholder="Optional"
+                  placeholder={t("editor.optional")}
                 />
               </label>
               {draft.category === "games" && (
                 <label>
-                  Platform
+                  {t("details.platform")}
                   <input
                     value={draft.platform ?? ""}
                     onChange={(e) =>
                       setDraft({ ...draft, platform: e.target.value })
                     }
-                    placeholder="Optional"
+                    placeholder={t("editor.optional")}
                   />
                 </label>
               )}
               {draft.providerMetadata && (
                 <label>
                   {draft.category === "movies"
-                    ? "Runtime (minutes)"
+                    ? t("editor.runtimeMinutes")
                     : draft.category === "tv-series"
-                      ? "Seasons"
+                      ? t("details.seasons")
                       : draft.category === "anime"
-                        ? "Episodes"
+                        ? t("details.episodes")
                         : draft.providerMetadata.volumes !== undefined
-                          ? "Volumes"
-                          : "Chapters"}
+                          ? t("details.volumes")
+                          : t("details.chapters")}
                   <input
                     type="number"
                     min="0"
@@ -303,7 +308,7 @@ export function ItemEditor({
                 </label>
               )}
               <label>
-                Status
+                {t("details.status")}
                 <select
                   value={draft.status}
                   onChange={(e) =>
@@ -313,13 +318,17 @@ export function ItemEditor({
                     })
                   }
                 >
-                  {statuses.map((status) => (
-                    <option key={status}>{status}</option>
-                  ))}
+                  {statusOptions(draft.category, locale).map(
+                    ({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
               <label>
-                Rating
+                {t("editor.rating")}
                 <input
                   type="number"
                   min="1"
@@ -337,35 +346,35 @@ export function ItemEditor({
                 />
               </label>
               <label className="wide">
-                Cover image URL
+                {t("editor.coverUrl")}
                 <input
                   value={draft.coverUrl ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, coverUrl: e.target.value })
                   }
-                  placeholder="Optional"
+                  placeholder={t("editor.optional")}
                 />
               </label>
               <label className="wide">
-                Description
+                {t("editor.description")}
                 <textarea
                   rows={3}
                   value={draft.description}
                   onChange={(e) =>
                     setDraft({ ...draft, description: e.target.value })
                   }
-                  placeholder="A short summary..."
+                  placeholder={t("editor.summaryPlaceholder")}
                 />
               </label>
               <label className="wide">
-                My notes
+                {t("details.myNotes")}
                 <textarea
                   rows={3}
                   value={draft.notes}
                   onChange={(e) =>
                     setDraft({ ...draft, notes: e.target.value })
                   }
-                  placeholder="Thoughts, progress, reminders..."
+                  placeholder={t("editor.notesPlaceholder")}
                 />
               </label>
             </div>
@@ -376,11 +385,11 @@ export function ItemEditor({
                 disabled={busy}
                 onClick={onClose}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button className="primary" disabled={busy}>
                 <Check size={18} />{" "}
-                {busy ? "Saving local copy…" : "Save to library"}
+                {busy ? t("editor.savingLocal") : t("editor.saveToLibrary")}
               </button>
             </div>
           </>

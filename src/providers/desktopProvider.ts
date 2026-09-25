@@ -4,6 +4,7 @@ import type {
   MediaProvider,
   ProviderAvailability,
 } from "./types";
+import { ProviderSearchError } from "./searchError";
 
 const providerNames: Record<ProviderId, string> = {
   igdb: "IGDB",
@@ -61,27 +62,32 @@ export class DesktopProvider implements MediaProvider {
 
   async search(query: string, category: Category) {
     if (!this.supports(category)) return [];
-    if (!window.everiaProviders)
-      throw new Error("Online search is available in the Everia desktop app.");
+    if (!window.everiaProviders) throw new ProviderSearchError("desktop-only");
     const response = await window.everiaProviders.search({
       provider: this.id,
       query,
       category,
     });
-    if (!response.ok) throw new Error(response.error);
+    if (!response.ok)
+      throw new ProviderSearchError(
+        response.errorCode ?? "unavailable",
+        response.error,
+      );
     return response.data ?? [];
   }
 
   async getDetails(providerId: string, category: Category) {
-    if (!window.everiaProviders)
-      throw new Error("Online search is available in the Everia desktop app.");
+    if (!window.everiaProviders) throw new ProviderSearchError("desktop-only");
     const response = await window.everiaProviders.details({
       provider: this.id,
       providerId,
       category,
     });
     if (!response.ok || !response.data)
-      throw new Error(response.error ?? "Details are currently unavailable.");
+      throw new ProviderSearchError(
+        response.errorCode ?? "details-unavailable",
+        response.error,
+      );
     return response.data;
   }
 }

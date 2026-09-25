@@ -1,31 +1,64 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { categoryInfo } from "./data";
+import { categoryLabel } from "./data";
 import {
   providerById,
   providerForCategory,
+  ProviderSearchError,
   searchProviderChain,
   type ImportCandidate,
 } from "./providers";
 import { categories, type Category, type ProviderId } from "./types";
+import { useLocalization } from "./localization/Localization";
+
+type Notice = {
+  kind:
+    | "desktop-only"
+    | "not-supported"
+    | "empty"
+    | "fallback"
+    | "all-unavailable"
+    | "credentials"
+    | "timeout"
+    | "rate-limit"
+    | "unavailable"
+    | "details-unavailable";
+  from?: string;
+  to?: string;
+};
+
+function searchFailure(error: unknown): Notice {
+  const code =
+    error instanceof ProviderSearchError ? error.code : "unavailable";
+  return {
+    kind: [
+      "desktop-only",
+      "all-unavailable",
+      "credentials",
+      "timeout",
+      "rate-limit",
+    ].includes(code)
+      ? (code as Notice["kind"])
+      : "unavailable",
+  };
+}
 
 export function OnlineSearch({
   category,
   setCategory,
   onUse,
   onConfigure,
-  onManual,
 }: {
   category: Category;
   setCategory: (category: Category) => void;
   onUse: (candidate: ImportCandidate) => void;
   onConfigure: () => void;
-  onManual: () => void;
 }) {
+  const { locale, t, count } = useLocalization();
   const provider = providerForCategory(category);
   const [query, setQuery] = useState("");
   const [available, setAvailable] = useState(Boolean(window.everiaProviders));
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<ImportCandidate[]>([]);
   const [selected, setSelected] = useState<ImportCandidate>();
@@ -40,18 +73,21 @@ export function OnlineSearch({
     setResultSource(undefined);
     if (!provider) {
       setAvailable(false);
-      setMessage(
-        "Online search is not configured for this category. Manual entry remains available.",
-      );
+      setMessage({ kind: "not-supported" });
       return () => {
         active = false;
       };
     }
-    provider.status().then((status) => {
-      if (!active) return;
-      setAvailable(Boolean(window.everiaProviders));
-      if (!window.everiaProviders) setMessage(status.reason ?? "");
-    });
+    provider
+      .status()
+      .then((status) => {
+        if (!active) return;
+        setAvailable(Boolean(window.everiaProviders));
+        if (!window.everiaProviders) setMessage({ kind: "desktop-only" });
+      })
+      .catch(() => {
+        if (active) setMessage({ kind: "unavailable" });
+      });
     return () => {
       active = false;
     };
@@ -60,24 +96,31 @@ export function OnlineSearch({
   const search = async () => {
     if (!provider || !available || query.trim().length < 2) return;
     setBusy(true);
-    setMessage("");
+    setMessage(null);
     setSelected(undefined);
     try {
       const response = await searchProviderChain(query.trim(), category);
       setResults(response.results);
       setResultSource(response.provider);
       setMessage(
-        response.notice ||
-          (!response.results.length ? "No matching entries were found." : ""),
+        response.results.length === 0
+          ? {
+              kind: "empty",
+              from: response.fallbackFrom,
+              to: response.providerName,
+            }
+          : response.fallbackFrom
+            ? {
+                kind: "fallback",
+                from: response.fallbackFrom,
+                to: response.providerName,
+              }
+            : null,
       );
     } catch (error) {
       setResults([]);
       setResultSource(undefined);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Online search is currently unavailable.",
-      );
+      setMessage(searchFailure(error));
     } finally {
       setBusy(false);
     }
@@ -87,17 +130,13 @@ export function OnlineSearch({
     if (!selected) return;
     const resultProvider = providerById(selected.provider);
     setBusy(true);
-    setMessage("");
+    setMessage(null);
     setDetailsFailed(false);
     try {
       onUse(await resultProvider.getDetails(selected.providerId, category));
     } catch (error) {
       setDetailsFailed(true);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Complete details are currently unavailable.",
-      );
+      setMessage({ kind: "details-unavailable" });
     } finally {
       setBusy(false);
     }
@@ -107,26 +146,28 @@ export function OnlineSearch({
     <div className="online-search">
       <div className="online-search-controls">
         <label>
-          Category
+          {t("editor.category")}
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value as Category)}
           >
             {categories.map((value) => (
               <option key={value} value={value}>
-                {categoryInfo[value].label}
+                {categoryLabel(value, locale)}
               </option>
             ))}
           </select>
         </label>
         <label className="online-query">
-          Search {provider?.name ?? "online"}
+          {t("search.providerQuery", {
+            provider: provider?.name ?? t("search.online"),
+          })}
           <span>
             <Search />
             <input
               value={query}
               disabled={!available || busy}
-              placeholder="Search by title..."
+              placeholder={t("search.placeholder")}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -143,33 +184,76 @@ export function OnlineSearch({
           disabled={!available || busy || query.trim().length < 2}
           onClick={() => void search()}
         >
-          {busy ? "Searching…" : "Search"}
+          {busy ? t("search.searching") : t("search.action")}
         </button>
       </div>
 
       {message && (
         <div className="online-message">
-          <p>{message}</p>
+          {message.kind === "empty" && message.from && message.to && (
+            <p>
+              {t("search.fallback", { from: message.from, to: message.to })}
+            </p>
+          )}
+          <p>
+            {t(
+              message.kind === "empty"
+                ? "search.empty"
+                : message.kind === "fallback"
+                  ? "search.fallback"
+                  : message.kind === "desktop-only"
+                    ? "search.desktopOnly"
+                    : message.kind === "not-supported"
+                      ? "search.notSupported"
+                      : message.kind === "all-unavailable"
+                        ? "search.allUnavailable"
+                        : message.kind === "credentials"
+                          ? "search.credentials"
+                          : message.kind === "timeout"
+                            ? "search.timeout"
+                            : message.kind === "rate-limit"
+                              ? "search.rateLimit"
+                              : message.kind === "details-unavailable"
+                                ? "search.detailsUnavailable"
+                                : "search.unavailable",
+              { from: message.from ?? "", to: message.to ?? "" },
+            )}
+          </p>
           {(category === "games" ||
             category === "movies" ||
             category === "tv-series") &&
-            message.includes("unavailable") && (
+            ["all-unavailable", "credentials", "unavailable"].includes(
+              message.kind,
+            ) && (
               <button type="button" className="secondary" onClick={onConfigure}>
-                Configure
+                {t("search.configure")}
               </button>
             )}
-          {message.includes("Manual Entry") && (
-            <button type="button" className="secondary" onClick={onManual}>
-              Manual Entry
-            </button>
-          )}
+          {["timeout", "rate-limit", "unavailable"].includes(message.kind) &&
+            available &&
+            query.trim().length >= 2 && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => void search()}
+              >
+                {t("search.retry")}
+              </button>
+            )}
         </div>
       )}
 
       {selected ? (
-        <section className="import-preview" aria-label="Import preview">
+        <section
+          className="import-preview"
+          aria-label={t("search.importPreview")}
+        >
           {selected.coverUrl && (
-            <img src={selected.coverUrl} alt={`Cover of ${selected.title}`} />
+            <img
+              src={selected.coverUrl}
+              alt={t("accessibility.coverOf", { title: selected.title })}
+            />
           )}
           <div>
             <span className="source-badge">{selected.providerName}</span>
@@ -183,7 +267,7 @@ export function OnlineSearch({
                 selected.releaseDate,
                 selected.genres?.join(", "),
                 selected.metadata?.volumes
-                  ? `${selected.metadata.volumes} volumes`
+                  ? count("search.volumes", selected.metadata.volumes)
                   : undefined,
               ]
                 .filter(Boolean)
@@ -196,7 +280,7 @@ export function OnlineSearch({
               disabled={busy}
               onClick={() => void useSelected()}
             >
-              {busy ? "Loading complete details…" : "Use this entry"}
+              {busy ? t("search.loadingDetails") : t("search.useEntry")}
             </button>
             {detailsFailed && (
               <div className="import-recovery">
@@ -205,21 +289,18 @@ export function OnlineSearch({
                   className="secondary"
                   onClick={() => void useSelected()}
                 >
-                  Retry
+                  {t("search.retry")}
                 </button>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => {
                     setSelected(undefined);
-                    setMessage("");
+                    setMessage(null);
                     setDetailsFailed(false);
                   }}
                 >
-                  Back to Results
-                </button>
-                <button type="button" className="secondary" onClick={onManual}>
-                  Manual Entry
+                  {t("search.backToResults")}
                 </button>
               </div>
             )}
@@ -227,7 +308,7 @@ export function OnlineSearch({
         </section>
       ) : (
         results.length > 0 && (
-          <div className="online-results" aria-label="Online search results">
+          <div className="online-results" aria-label={t("search.results")}>
             {results.map((result) => (
               <button
                 type="button"
@@ -235,7 +316,7 @@ export function OnlineSearch({
                 onClick={() => {
                   setSelected(result);
                   setDetailsFailed(false);
-                  setMessage("");
+                  setMessage(null);
                 }}
               >
                 {result.coverUrl ? (
@@ -251,11 +332,11 @@ export function OnlineSearch({
                       result.creator,
                       result.releaseDate,
                       result.metadata?.volumes
-                        ? `${result.metadata.volumes} volumes`
+                        ? count("search.volumes", result.metadata.volumes)
                         : undefined,
                     ]
                       .filter(Boolean)
-                      .join(" · ") || "Additional details available"}
+                      .join(" · ") || t("search.additionalDetails")}
                   </small>
                 </span>
               </button>
@@ -265,7 +346,7 @@ export function OnlineSearch({
       )}
       {resultSource === "rawg" && results.length > 0 && (
         <p className="result-attribution">
-          Game metadata by{" "}
+          {t("search.rawgAttribution")}{" "}
           <a href="https://rawg.io/" target="_blank" rel="noreferrer">
             RAWG
           </a>
