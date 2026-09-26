@@ -267,8 +267,15 @@ main {
   background: var(--accent);
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.25;
   cursor: pointer;
   box-shadow: 0 8px 28px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.add-button svg,
+.primary svg,
+.secondary svg {
+  display: block;
+  flex: none;
 }
 .primary:disabled,
 button:disabled {
@@ -552,6 +559,11 @@ textarea {
   color: var(--muted);
   font-size: 11px;
 }
+.sort-control select {
+  height: 38px;
+  padding-block: 0;
+  line-height: 1.25;
+}
 .view-toggle {
   display: flex;
   padding: 3px;
@@ -577,6 +589,8 @@ textarea {
 }
 .view-toggle svg {
   width: 16px;
+  height: 16px;
+  display: block;
 }
 .status-filters {
   display: flex;
@@ -587,12 +601,16 @@ textarea {
 }
 .status-filters button {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px 14px;
   color: #89969e;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   font-size: 11px;
+  line-height: 1.25;
   cursor: pointer;
 }
 .status-filters button:hover {
@@ -841,6 +859,8 @@ textarea {
 }
 .icon-button svg {
   width: 18px;
+  height: 18px;
+  display: block;
 }
 .form-grid,
 .edit-grid {
@@ -879,6 +899,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
+  line-height: 1.25;
   cursor: pointer;
 }
 .add-mode-toggle {

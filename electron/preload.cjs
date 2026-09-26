@@ -17,12 +17,20 @@ contextBridge.exposeInMainWorld("everiaProviders", {
 contextBridge.exposeInMainWorld("everiaWindow", {
   onResponsiveScale: (callback) => {
     let active = true;
-    const listener = (_event, value) => callback(value);
+    let notificationVersion = 0;
+    const listener = (_event, value) => {
+      notificationVersion += 1;
+      callback(value);
+    };
     ipcRenderer.on("window:responsive-scale", listener);
+    const requestedAtVersion = notificationVersion;
     void ipcRenderer
       .invoke("window:responsive-scale-current")
       .then((value) => {
-        if (active) callback(value);
+        // A resize/maximize notification can overtake this startup reply.
+        // Never let an older snapshot replace the latest window state.
+        if (active && notificationVersion === requestedAtVersion)
+          callback(value);
       })
       .catch(() => {});
     return () => {
@@ -47,7 +55,8 @@ contextBridge.exposeInMainWorld("everiaBackup", {
   chooseDestination: () => ipcRenderer.invoke("backup:choose-destination"),
   setEnabled: (enabled) => ipcRenderer.invoke("backup:set-enabled", enabled),
   selectBackup: () => ipcRenderer.invoke("backup:select"),
-  beginRestore: (snapshot) => ipcRenderer.invoke("backup:begin-restore", snapshot),
+  beginRestore: (snapshot) =>
+    ipcRenderer.invoke("backup:begin-restore", snapshot),
   pendingRestore: () => ipcRenderer.invoke("backup:pending"),
   finishRestore: () => ipcRenderer.invoke("backup:finish-restore"),
 });
