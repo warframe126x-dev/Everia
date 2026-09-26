@@ -67,7 +67,6 @@ function createWindow() {
   });
 
   let saveTimer;
-  let lastZoom;
   let rendererReady = false;
   const persistWindowState = () => {
     const bounds = window.isMaximized()
@@ -87,8 +86,11 @@ function createWindow() {
   const applyResponsiveScale = () => {
     if (window.isDestroyed()) return;
     const responsiveState = responsiveStateForWindow(window);
-    if (responsiveState.zoom !== lastZoom) {
-      lastZoom = responsiveState.zoom;
+    // Loading a page can reset its zoom after an early maximize/resize event.
+    // Compare with the loaded WebContents, not the last value we requested.
+    if (
+      Math.abs(window.webContents.getZoomFactor() - responsiveState.zoom) > 0.001
+    ) {
       window.webContents.setZoomFactor(responsiveState.zoom);
     }
     if (rendererReady)

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-specifier-resolution=node --test src/validation.test.ts electron/providers.test.cjs electron/credential-store.test.cjs electron/window-state.test.cjs electron/preload-responsive.test.cjs electron/backup-store.test.cjs",
+    "test": "node --experimental-specifier-resolution=node --test src/validation.test.ts electron/providers.test.cjs electron/credential-store.test.cjs electron/window-state.test.cjs electron/main-responsive.test.cjs electron/preload-responsive.test.cjs electron/backup-store.test.cjs",
     "test:ui": "vitest run",
     "format:check": "prettier --check src",
     "desktop": "npm run build && electron .",
