@@ -1,4 +1,4 @@
-name: Everia Stage 3 RTL exact-commit Windows portable QA
+name: Everia Stage 3 correction exact-commit Windows portable QA
 
 on:
   push:
@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
+      SOURCE_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
+      STAGE3_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
       STAGE2_SHA: b77fb0046cd3bc13ec7989b85f17be7c4c6ffba0
       V09_SHA: fd98cfa3f79c10cebcf757f22a52e98d0f547e93
       V06_SHA: 762d79061d1bdf2bd99324a48095b6479db8d4a2
@@ -22,10 +23,10 @@ jobs:
       V08_SHA: 3afde654fe41d10fc5ea8ea80eed0ee5ffb3de1e
       PACKAGE_DIR: release/Everia-win32-x64
       VERIFICATION_DIR: verification
-      FINAL_ZIP: Everia-v1.0-Stage3-RTL-QA-win-x64.zip
+      FINAL_ZIP: Everia-v1.0-Stage3-Correction-QA-win-x64.zip
 
     steps:
-      - name: Check out the exact Stage 3 application source
+      - name: Check out the exact Stage 3 correction source
         uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_SHA }}
@@ -54,8 +55,9 @@ jobs:
           if (((git ls-remote origin refs/heads/main) -split '\s+')[0] -ne $env:V09_SHA) {
             throw "main moved from the stable v0.9 baseline."
           }
-          if ((git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:STAGE2_SHA) {
-            throw "Stage 3 is not the direct successor of the approved Stage 2 commit."
+          if ((git rev-parse "$env:STAGE3_SHA^1").Trim() -ne $env:STAGE2_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:STAGE3_SHA) {
+            throw "The correction is not the direct successor of the approved Stage 3 candidate."
           }
           if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
             throw "The v0.9 source is not descended from the verified v0.8 baseline."
@@ -731,12 +733,12 @@ jobs:
           }
           $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
 
-          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-RTL-QA-win-x64"
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-Correction-QA-win-x64"
           New-Item -ItemType Directory -Force -Path $delivery | Out-Null
           Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
           Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
           @(
-            "Everia v1.0 Stage 3 RTL portable QA — not a release or installer"
+            "Everia v1.0 Stage 3 correction portable QA — not a release or installer"
             "Built from exact source commit: $env:SOURCE_SHA"
             "The executable retains the existing 0.9.0 metadata because this QA stage does not bump the application version."
             "Everia-win32-x64/Everia.exe is the exact executable that passed the launch, Home-screen, responsive-view, and scrollbar-geometry tests."
@@ -807,8 +809,8 @@ jobs:
       - name: Upload exact launch-tested delivery
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-RTL-QA-win-x64
-          path: Everia-v1.0-Stage3-RTL-QA-win-x64.zip
+          name: Everia-v1.0-Stage3-Correction-QA-win-x64
+          path: Everia-v1.0-Stage3-Correction-QA-win-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -816,7 +818,7 @@ jobs:
       - name: Upload launch evidence
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-RTL-QA-verification
+          name: Everia-v1.0-Stage3-Correction-QA-verification
           path: verification
           if-no-files-found: error
           retention-days: 30
