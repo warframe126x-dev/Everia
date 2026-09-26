@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
+      SOURCE_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
+      PRELOAD_CORRECTION_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
       STAGE3_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
       STAGE2_SHA: b77fb0046cd3bc13ec7989b85f17be7c4c6ffba0
       V09_SHA: fd98cfa3f79c10cebcf757f22a52e98d0f547e93
@@ -56,8 +57,9 @@ jobs:
             throw "main moved from the stable v0.9 baseline."
           }
           if ((git rev-parse "$env:STAGE3_SHA^1").Trim() -ne $env:STAGE2_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:STAGE3_SHA) {
-            throw "The correction is not the direct successor of the approved Stage 3 candidate."
+              (git rev-parse "$env:PRELOAD_CORRECTION_SHA^1").Trim() -ne $env:STAGE3_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA) {
+            throw "The correction is not descended directly from the approved Stage 3 candidate."
           }
           if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
             throw "The v0.9 source is not descended from the verified v0.8 baseline."
