@@ -6,6 +6,12 @@ import {
   type SettingsValues,
 } from "./settingsDraft";
 
+export class CredentialApplyFailure extends Error {
+  constructor(readonly code: string) {
+    super("Provider credential changes could not be applied.");
+  }
+}
+
 /** Keep the protected credential batch last; no subsequent fallible write follows it. */
 export async function applySettingsDraft(
   committed: SettingsValues,
@@ -55,7 +61,9 @@ export async function applySettingsDraft(
       const response =
         await window.everiaProviders?.applyDraftCredentials(operations);
       if (!response?.ok)
-        throw new Error(response?.errorCode ?? "operation-failed");
+        throw new CredentialApplyFailure(
+          response?.errorCode ?? "operation-failed",
+        );
     }
     return {
       theme,

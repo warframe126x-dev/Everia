@@ -228,6 +228,38 @@ test("credential error code localizes without rendering diagnostic or altering s
       .length,
   ).toBeGreaterThan(0);
 });
+test("failed credential Apply reports a safe localized cause and keeps the pending secret", async () => {
+  bridge();
+  const applyDraftCredentials = vi
+    .fn()
+    .mockResolvedValue({
+      ok: false,
+      errorCode: "protection-unavailable",
+      error: "private-token",
+    });
+  vi.stubGlobal("everiaProviders", {
+    ...window.everiaProviders,
+    applyDraftCredentials,
+  });
+  show("ar");
+  const input = await screen.findByLabelText(
+    translate("ar", "providers.readToken"),
+  );
+  fireEvent.change(input, { target: { value: "private-token" } });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: translate("ar", "settings.applyChanges"),
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toBe(
+      translate("ar", "providers.protectionUnavailable"),
+    ),
+  );
+  expect((input as HTMLInputElement).value).toBe("private-token");
+  expect(applyDraftCredentials).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText("private-token")).toBeNull();
+});
 test("failed locale Apply retains draft and shows localized error", async () => {
   bridge();
   show("fr");
@@ -318,16 +350,14 @@ test("backup location and automatic switch remain draft until Apply; OS-drive wa
   bridge();
   const setConfig = vi.fn().mockResolvedValue({});
   vi.stubGlobal("everiaBackup", {
-    config: vi
-      .fn()
-      .mockResolvedValue({
-        enabled: true,
-        destination: "C:\\Users\\Chris\\Documents\\Everia Backups",
-        destinationSelected: false,
-        lastSuccess: null,
-        lastFailure: null,
-        version: 1,
-      }),
+    config: vi.fn().mockResolvedValue({
+      enabled: true,
+      destination: "C:\\Users\\Chris\\Documents\\Everia Backups",
+      destinationSelected: false,
+      lastSuccess: null,
+      lastFailure: null,
+      version: 1,
+    }),
     systemDrive: vi.fn().mockResolvedValue("C:\\"),
     chooseDestination: vi.fn().mockResolvedValue("D:\\Everia Backups"),
     setConfig,
@@ -356,16 +386,14 @@ test("dirty Settings must be resolved before Restore selects a backup", async ()
   bridge();
   const selectBackup = vi.fn().mockResolvedValue("truncated backup");
   vi.stubGlobal("everiaBackup", {
-    config: vi
-      .fn()
-      .mockResolvedValue({
-        enabled: true,
-        destination: "C:\\Backups",
-        destinationSelected: false,
-        lastSuccess: null,
-        lastFailure: null,
-        version: 1,
-      }),
+    config: vi.fn().mockResolvedValue({
+      enabled: true,
+      destination: "C:\\Backups",
+      destinationSelected: false,
+      lastSuccess: null,
+      lastFailure: null,
+      version: 1,
+    }),
     systemDrive: vi.fn().mockResolvedValue("C:\\"),
     selectBackup,
   });
@@ -474,16 +502,14 @@ test("a backup with a pending destination uses only the committed destination", 
   bridge();
   vi.stubGlobal("crypto", webcrypto);
   vi.stubGlobal("__APP_VERSION__", "1.0.0");
-  const config = vi
-    .fn()
-    .mockResolvedValue({
-      enabled: true,
-      destination: "C:\\Backups",
-      destinationSelected: false,
-      lastSuccess: null,
-      lastFailure: null,
-      version: 1,
-    });
+  const config = vi.fn().mockResolvedValue({
+    enabled: true,
+    destination: "C:\\Backups",
+    destinationSelected: false,
+    lastSuccess: null,
+    lastFailure: null,
+    version: 1,
+  });
   const write = vi.fn().mockResolvedValue("C:\\Backups\\snapshot.everiabackup");
   const setConfig = vi.fn();
   vi.stubGlobal("everiaBackup", {

@@ -36,7 +36,7 @@ import { useWallpaper } from "./useWallpaper";
 import { assetUrl } from "./assetPaths";
 import { categoryArtworkUrl, defaultArtworkUrl } from "./categoryAssets";
 import { useLocalization } from "./localization/Localization";
-import { applySettingsDraft } from "./settingsApply";
+import { applySettingsDraft, CredentialApplyFailure } from "./settingsApply";
 import {
   freshDraft,
   settingsDirty,
@@ -95,7 +95,7 @@ function App() {
       backupDestination: null,
     }),
   );
-  const [settingsError, setSettingsError] = useState(false);
+  const [settingsError, setSettingsError] = useState<StringKey | "">("");
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [pendingExit, setPendingExit] = useState<
     | { kind: "navigate"; next: View; category?: Category }
@@ -169,7 +169,7 @@ function App() {
           backupDestination: current.backupDestination ?? config.destination,
         }));
       })
-      .catch(() => setSettingsError(true));
+      .catch(() => setSettingsError("settings.applyFailure"));
     return () => {
       active = false;
     };
@@ -225,12 +225,12 @@ function App() {
   const discardSettings = () => {
     setDraft(freshDraft(committedSettings));
     previewLocale(committedLocale);
-    setSettingsError(false);
+    setSettingsError("");
   };
   const applySettings = async (): Promise<boolean> => {
     if (!dirtySettings || settingsBusy) return !dirtySettings;
     setSettingsBusy(true);
-    setSettingsError(false);
+    setSettingsError("");
     try {
       const applied = await applySettingsDraft(committedSettings, draft);
       setTheme(applied.theme);
@@ -246,8 +246,17 @@ function App() {
       );
       setDraft(freshDraft(applied));
       return true;
-    } catch {
-      setSettingsError(true);
+    } catch (applyError) {
+      const credentialCodes: Record<string, StringKey> = {
+        "credential-required": "providers.credentialRequired",
+        "protection-unavailable": "providers.protectionUnavailable",
+        "credential-unreadable": "providers.credentialUnreadable",
+      };
+      setSettingsError(
+        applyError instanceof CredentialApplyFailure
+          ? (credentialCodes[applyError.code] ?? "settings.applyFailure")
+          : "settings.applyFailure",
+      );
       return false;
     } finally {
       setSettingsBusy(false);
@@ -643,7 +652,7 @@ function App() {
             className="settings-exit-dialog"
           >
             <h2 id="settings-exit-title">{t("settings.unsavedWarning")}</h2>
-            {settingsError && <p role="alert">{t("settings.applyFailure")}</p>}
+            {settingsError && <p role="alert">{t(settingsError)}</p>}
             <div className="settings-exit-actions">
               <button
                 className="primary"

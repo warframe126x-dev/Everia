@@ -44,14 +44,12 @@ test("Apply persists changed locale, appearance, backup config, and credential b
   const applyDraftCredentials = vi.fn().mockResolvedValue({ ok: true });
   vi.stubGlobal("everiaBackup", {
     setConfig,
-    config: vi
-      .fn()
-      .mockResolvedValue({
-        ...committed,
-        enabled: true,
-        destination: committed.backupDestination,
-        destinationSelected: false,
-      }),
+    config: vi.fn().mockResolvedValue({
+      ...committed,
+      enabled: true,
+      destination: committed.backupDestination,
+      destinationSelected: false,
+    }),
   });
   vi.stubGlobal("everiaProviders", { applyDraftCredentials });
   const draft = freshDraft(committed);
@@ -98,9 +96,9 @@ test("failed credential Apply rolls back locale, theme and backup configuration 
     kind: "save",
     credentials: { clientId: "id", clientSecret: "" },
   };
-  await expect(applySettingsDraft(committed, draft)).rejects.toThrow(
-    "credential-required",
-  );
+  await expect(applySettingsDraft(committed, draft)).rejects.toMatchObject({
+    code: "credential-required",
+  });
   expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
   expect(JSON.parse(localStorage.getItem("everia.theme.v1")!)).toEqual(
     defaultTheme,
@@ -139,9 +137,9 @@ test("failed Apply removes only its staged wallpaper and preserves a previously 
       .fn()
       .mockResolvedValue({ ok: false, errorCode: "credential-required" }),
   });
-  await expect(applySettingsDraft(current, draft)).rejects.toThrow(
-    "credential-required",
-  );
+  await expect(applySettingsDraft(current, draft)).rejects.toMatchObject({
+    code: "credential-required",
+  });
   expect(localStorage.getItem("everia.theme.v1")).toBe(
     JSON.stringify(oldTheme),
   );

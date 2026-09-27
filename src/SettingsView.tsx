@@ -10,6 +10,7 @@ import { locales } from "./localization/locale";
 import { ControlSelect } from "./ControlSelect";
 import type { SettingsDraft } from "./settingsDraft";
 import { BackupSettings } from "./BackupSettings";
+import type { StringKey } from "./localization/format";
 
 export function SettingsView({
   draft,
@@ -31,7 +32,7 @@ export function SettingsView({
   onRestore: () => void;
   dirty: boolean;
   applying: boolean;
-  applyError: boolean;
+  applyError: StringKey | "";
   backupConfig: {
     destination: string;
     lastSuccess: string | null;
@@ -257,7 +258,7 @@ export function SettingsView({
         onRestore={onRestore}
         restoreError={restoreError}
       />
-      {applyError && <p role="alert">{t("settings.applyFailure")}</p>}
+      {applyError && <p role="alert">{t(applyError)}</p>}
       <button
         className="primary settings-apply"
         disabled={!dirty || applying}
