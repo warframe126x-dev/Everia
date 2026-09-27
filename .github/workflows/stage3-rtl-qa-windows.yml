@@ -14,8 +14,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: e63b7e0f4debc0fb7e9ed12168a637a8437a78a1
-      SPLIT_BASE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
+      SOURCE_SHA: 83fc9758206b7107be1f329a748352860616ecb6
+      SPLIT_BASE_SHA: e63b7e0f4debc0fb7e9ed12168a637a8437a78a1
+      CORRECTION_BASE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
       PREVIOUS_CORRECTION_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
       TOOLBAR_CORRECTION_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
       ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
@@ -65,7 +66,8 @@ jobs:
               (git rev-parse "$env:ZOOM_CORRECTION_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA -or
               (git rev-parse "$env:TOOLBAR_CORRECTION_SHA^1").Trim() -ne $env:ZOOM_CORRECTION_SHA -or
               (git rev-parse "$env:PREVIOUS_CORRECTION_SHA^1").Trim() -ne $env:TOOLBAR_CORRECTION_SHA -or
-              (git rev-parse "$env:SPLIT_BASE_SHA^1").Trim() -ne $env:PREVIOUS_CORRECTION_SHA -or
+              (git rev-parse "$env:CORRECTION_BASE_SHA^1").Trim() -ne $env:PREVIOUS_CORRECTION_SHA -or
+              (git rev-parse "$env:SPLIT_BASE_SHA^1").Trim() -ne $env:CORRECTION_BASE_SHA -or
               (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:SPLIT_BASE_SHA) {
             throw "The correction is not descended directly from the approved Stage 3 candidate."
           }
@@ -867,7 +869,7 @@ jobs:
                 const center = (node) => { const r = node.getBoundingClientRect(); return { x:r.x+r.width/2, y:r.y+r.height/2 }; };
                 return [...document.querySelectorAll('.form-grid .control-select')].map((wrapper) => {
                   const select = wrapper.querySelector('select'), arrow = wrapper.querySelector('svg');
-                  return { appearance:getComputedStyle(select).appearance, lineHeight:getComputedStyle(select).lineHeight,
+                  return { value:select.value, appearance:getComputedStyle(select).appearance, lineHeight:getComputedStyle(select).lineHeight,
                     height:select.getBoundingClientRect().height, dy:center(arrow).y-center(select).y,
                     dx:center(arrow).x-center(select).x, options:select.options.length };
                 });
@@ -876,7 +878,14 @@ jobs:
                   control.lineHeight === 'normal' || Math.abs(control.dy) > 1 || control.options < 2 ||
                   (locale === 'ar' ? control.dx >= 0 : control.dx <= 0)))
                 throw new Error(`Incorrect ${locale} Add/Edit select presentation: ${JSON.stringify(editorSelects)}`);
-              reports.push({ locale, ...state, layout, controlLayout, editorSelects });
+              await evaluate("document.querySelector('.form-grid .control-select select').focus()");
+              await command("Input.dispatchKeyEvent", { type:'keyDown', key:'ArrowDown', code:'ArrowDown', windowsVirtualKeyCode:40 });
+              await command("Input.dispatchKeyEvent", { type:'keyUp', key:'ArrowDown', code:'ArrowDown', windowsVirtualKeyCode:40 });
+              await pause(200);
+              const keyboardValue = await evaluate("document.querySelector('.form-grid .control-select select').value");
+              if (keyboardValue === editorSelects[0].value)
+                throw new Error(`${locale} native Category select did not respond to ArrowDown`);
+              reports.push({ locale, ...state, layout, controlLayout, editorSelects, keyboardValue });
               if (next) await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(next))})`);
               try { await evaluate("window.close()"); } catch { /* Window may close before CDP replies. */ }
               for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++) await pause(250);
