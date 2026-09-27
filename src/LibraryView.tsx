@@ -1,4 +1,4 @@
-import { BookOpen, Grid2X2, List, Plus, Star } from "lucide-react";
+import { BookOpen, ChevronDown, Grid2X2, List, Plus, Star } from "lucide-react";
 import { categoryLabel, subtypeLabel } from "./data";
 import { Cover } from "./Cover";
 import { statusLabel, statusOptions } from "./mediaConfig";
@@ -50,15 +50,18 @@ export function LibraryView({
         <div className="library-controls">
           <label className="sort-control">
             <span>{t("library.sortBy")}</span>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-            >
-              <option value="dateAdded">{t("library.recentlyAdded")}</option>
-              <option value="title">{t("library.title")}</option>
-              <option value="releaseDate">{t("library.releaseDate")}</option>
-              <option value="rating">{t("library.rating")}</option>
-            </select>
+            <span className="sort-select">
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+              >
+                <option value="dateAdded">{t("library.recentlyAdded")}</option>
+                <option value="title">{t("library.title")}</option>
+                <option value="releaseDate">{t("library.releaseDate")}</option>
+                <option value="rating">{t("library.rating")}</option>
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
           </label>
           <div className="view-toggle" aria-label={t("library.view")}>
             <button

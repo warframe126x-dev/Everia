@@ -384,8 +384,10 @@ function App() {
               />
             </div>
             <button className="add-button" onClick={() => setAddOpen(true)}>
-              <Plus size={18} />
-              <span>{t("navigation.addItem")}</span>
+              <span className="add-button-content">
+                <Plus size={18} />
+                <span>{t("navigation.addItem")}</span>
+              </span>
             </button>
           </header>
         )}
