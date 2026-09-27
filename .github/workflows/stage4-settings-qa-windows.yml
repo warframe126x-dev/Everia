@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: 8dd5ae907ec09f8b4620b1d80fb81eea1950886b
+      SOURCE_SHA: 1e543e9999c6184b30f25168560bdf93cca09cf1
+      STAGE4_FIRST_SHA: 8dd5ae907ec09f8b4620b1d80fb81eea1950886b
       STAGE4_BASE_SHA: 3fae743b228e604a98884d2761320118a7c7cbbb
       PREREQUISITE_SHA: 990e0b590ee837357b92af7f658da442005db33e
       SPLIT_BASE_SHA: e63b7e0f4debc0fb7e9ed12168a637a8437a78a1
@@ -66,7 +67,8 @@ jobs:
           }
           if ((git rev-parse "$env:STAGE4_BASE_SHA^1").Trim() -ne $env:STAGE3_APPROVED_SHA -or
               (git rev-parse "$env:PREREQUISITE_SHA^1").Trim() -ne $env:STAGE4_BASE_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:PREREQUISITE_SHA) {
+              (git rev-parse "$env:STAGE4_FIRST_SHA^1").Trim() -ne $env:PREREQUISITE_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:STAGE4_FIRST_SHA) {
             throw "Stage 4 source is not directly descended from the approved Stage 3 and credential prerequisite checkpoints."
           }
           if (((git ls-remote origin refs/heads/v1.0) -split '\s+')[0] -ne $env:SOURCE_SHA) {
