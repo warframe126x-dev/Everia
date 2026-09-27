@@ -370,7 +370,7 @@ select {
   height: 38px;
   padding-block: 0;
 }
-.edit-grid label .control-select select {
+:root .edit-grid label .control-select select {
   height: calc(37px + 8px * var(--responsive-progress));
   padding-block: 0;
 }
