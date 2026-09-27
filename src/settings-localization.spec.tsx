@@ -230,13 +230,11 @@ test("credential error code localizes without rendering diagnostic or altering s
 });
 test("failed credential Apply reports a safe localized cause and keeps the pending secret", async () => {
   bridge();
-  const applyDraftCredentials = vi
-    .fn()
-    .mockResolvedValue({
-      ok: false,
-      errorCode: "protection-unavailable",
-      error: "private-token",
-    });
+  const applyDraftCredentials = vi.fn().mockResolvedValue({
+    ok: false,
+    errorCode: "protection-unavailable",
+    error: "private-token",
+  });
   vi.stubGlobal("everiaProviders", {
     ...window.everiaProviders,
     applyDraftCredentials,

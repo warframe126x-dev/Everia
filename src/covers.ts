@@ -75,7 +75,10 @@ export async function exportAssets(): Promise<StoredAsset[]> {
         request.onsuccess = () => {
           const cursor = request.result;
           if (!cursor) return;
-          if (typeof cursor.key !== "string" || !(cursor.value instanceof Blob)) {
+          if (
+            typeof cursor.key !== "string" ||
+            !(cursor.value instanceof Blob)
+          ) {
             transaction.abort();
             return;
           }
@@ -85,7 +88,8 @@ export async function exportAssets(): Promise<StoredAsset[]> {
       }
       transaction.oncomplete = () => resolve(assets);
       transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error ?? new Error("Invalid stored image."));
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error("Invalid stored image."));
     });
   } finally {
     db.close();
@@ -158,7 +162,8 @@ export async function validateWallpaper(file: File): Promise<void> {
 }
 
 export async function removeWallpaper(id: string): Promise<void> {
-  if (!/^local-wallpaper:[A-Za-z0-9_-]+$/.test(id)) throw new Error("Invalid wallpaper ID.");
+  if (!/^local-wallpaper:[A-Za-z0-9_-]+$/.test(id))
+    throw new Error("Invalid wallpaper ID.");
   const db = await open();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -168,7 +173,9 @@ export async function removeWallpaper(id: string): Promise<void> {
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 }
 
 export async function readWallpaper(id: string): Promise<Blob | undefined> {
