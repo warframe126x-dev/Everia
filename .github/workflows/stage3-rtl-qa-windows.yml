@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
+      SOURCE_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
+      TOOLBAR_CORRECTION_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
       ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
       PRELOAD_CORRECTION_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
       STAGE3_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
@@ -60,7 +61,8 @@ jobs:
           if ((git rev-parse "$env:STAGE3_SHA^1").Trim() -ne $env:STAGE2_SHA -or
               (git rev-parse "$env:PRELOAD_CORRECTION_SHA^1").Trim() -ne $env:STAGE3_SHA -or
               (git rev-parse "$env:ZOOM_CORRECTION_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:ZOOM_CORRECTION_SHA) {
+              (git rev-parse "$env:TOOLBAR_CORRECTION_SHA^1").Trim() -ne $env:ZOOM_CORRECTION_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:TOOLBAR_CORRECTION_SHA) {
             throw "The correction is not descended directly from the approved Stage 3 candidate."
           }
           if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
