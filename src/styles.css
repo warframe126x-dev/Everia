@@ -277,6 +277,10 @@ main {
   display: block;
   flex: none;
 }
+/* Segoe UI's visible ink for Save labels sits below the centered Check path. */
+.action-check-icon {
+  translate: 0 2px;
+}
 .add-button-content {
   display: inline-grid;
   grid-auto-flow: column;
@@ -360,6 +364,19 @@ select {
   margin-inline-end: 12px;
   color: var(--accent);
   pointer-events: none;
+}
+.form-grid .control-select select,
+.online-search-controls .control-select select {
+  height: 38px;
+  padding-block: 0;
+}
+.edit-grid label .control-select select {
+  height: calc(37px + 8px * var(--responsive-progress));
+  padding-block: 0;
+}
+.status-select-wrap .control-select select {
+  height: 40px;
+  padding-block: 0;
 }
 input,
 textarea {
@@ -1266,6 +1283,11 @@ textarea {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+/* The status label's ink descends below its line box; align both indicators. */
+.status-select-wrap .status,
+.status-select-wrap .control-select svg {
+  translate: 0 2px;
 }
 .metadata-list {
   display: grid;

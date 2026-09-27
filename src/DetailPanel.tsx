@@ -18,6 +18,7 @@ import {
 } from "./mediaConfig";
 import { useLocalization } from "./localization/Localization";
 import { StarRating } from "./StarRating";
+import { ControlSelect } from "./ControlSelect";
 import {
   categories,
   type Category,
@@ -220,24 +221,26 @@ export function DetailPanel({
                     <i
                       className={`status ${item.status.toLowerCase().replace(" ", "-")}`}
                     />
-                    <select
-                      aria-label={t("details.status")}
-                      value={item.status}
-                      onChange={(event) =>
-                        onSave({
-                          ...item,
-                          status: event.target.value as ReadingStatus,
-                        })
-                      }
-                    >
-                      {statusOptions(item.category, locale).map(
-                        ({ value, label }) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ),
-                      )}
-                    </select>
+                    <ControlSelect>
+                      <select
+                        aria-label={t("details.status")}
+                        value={item.status}
+                        onChange={(event) =>
+                          onSave({
+                            ...item,
+                            status: event.target.value as ReadingStatus,
+                          })
+                        }
+                      >
+                        {statusOptions(item.category, locale).map(
+                          ({ value, label }) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </ControlSelect>
                   </span>
                 </label>
               </div>
@@ -297,50 +300,54 @@ export function DetailPanel({
               </label>
               <label>
                 {t("editor.category")}
-                <select
-                  value={draft.category}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      category: e.target.value as Category,
-                      subtype: undefined,
-                    })
-                  }
-                >
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {categoryLabel(category, locale)}
-                    </option>
-                  ))}
-                </select>
+                <ControlSelect>
+                  <select
+                    value={draft.category}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        category: e.target.value as Category,
+                        subtype: undefined,
+                      })
+                    }
+                  >
+                    {categories.map((category) => (
+                      <option key={category} value={category}>
+                        {categoryLabel(category, locale)}
+                      </option>
+                    ))}
+                  </select>
+                </ControlSelect>
               </label>
               {(draft.category === "novels" || draft.category === "manga") && (
                 <label>
                   {t("editor.type")}
-                  <select
-                    value={
-                      draft.subtype ??
-                      (draft.category === "novels" ? "Novel" : "Manga")
-                    }
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        subtype: e.target.value as MediaItem["subtype"],
-                      })
-                    }
-                  >
-                    {(draft.category === "novels"
-                      ? ["Novel", "Light Novel", "Web Novel"]
-                      : ["Manga", "Manhwa", "Manhua"]
-                    ).map((value) => (
-                      <option key={value} value={value}>
-                        {subtypeLabel(
-                          value as NonNullable<MediaItem["subtype"]>,
-                          locale,
-                        )}
-                      </option>
-                    ))}
-                  </select>
+                  <ControlSelect>
+                    <select
+                      value={
+                        draft.subtype ??
+                        (draft.category === "novels" ? "Novel" : "Manga")
+                      }
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          subtype: e.target.value as MediaItem["subtype"],
+                        })
+                      }
+                    >
+                      {(draft.category === "novels"
+                        ? ["Novel", "Light Novel", "Web Novel"]
+                        : ["Manga", "Manhwa", "Manhua"]
+                      ).map((value) => (
+                        <option key={value} value={value}>
+                          {subtypeLabel(
+                            value as NonNullable<MediaItem["subtype"]>,
+                            locale,
+                          )}
+                        </option>
+                      ))}
+                    </select>
+                  </ControlSelect>
                 </label>
               )}
               <label>
@@ -405,24 +412,26 @@ export function DetailPanel({
               )}
               <label>
                 {t("details.status")}
-                <select
-                  aria-label={t("details.status")}
-                  value={draft.status}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      status: e.target.value as ReadingStatus,
-                    })
-                  }
-                >
-                  {statusOptions(draft.category, locale).map(
-                    ({ value, label }) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ),
-                  )}
-                </select>
+                <ControlSelect>
+                  <select
+                    aria-label={t("details.status")}
+                    value={draft.status}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        status: e.target.value as ReadingStatus,
+                      })
+                    }
+                  >
+                    {statusOptions(draft.category, locale).map(
+                      ({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </ControlSelect>
               </label>
               <label>
                 {t("details.linkLabel")}
@@ -495,7 +504,7 @@ export function DetailPanel({
                   {t("common.cancel")}
                 </button>
                 <button className="primary" disabled={busy}>
-                  <Check />{" "}
+                  <Check className="action-check-icon" />{" "}
                   {busy ? t("details.saving") : t("details.saveChanges")}
                 </button>
               </div>

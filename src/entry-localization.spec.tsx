@@ -83,12 +83,32 @@ for (const locale of ["en", "fr", "ar"] as const) {
     const quickStatus = screen.getByLabelText(
       translate(locale, "details.status"),
     ) as HTMLSelectElement;
+    expect(
+      quickStatus.closest(".control-select")?.querySelector("svg"),
+    ).toBeTruthy();
+    expect(
+      quickStatus.closest(".status-select-wrap")?.querySelector("i.status"),
+    ).toBeTruthy();
     expect(quickStatus.value).toBe("Planning");
     fireEvent.change(quickStatus, { target: { value: "Completed" } });
     expect(save.mock.calls[0][0].status).toBe("Completed");
     fireEvent.click(
       screen.getByRole("button", { name: translate(locale, "details.edit") }),
     );
+    for (const key of [
+      "editor.category",
+      "editor.type",
+      "details.status",
+    ] as const) {
+      const select = screen.getByLabelText(
+        translate(locale, key),
+      ) as HTMLSelectElement;
+      expect(
+        select
+          .closest(".control-select")
+          ?.querySelector("svg[aria-hidden='true']"),
+      ).toBeTruthy();
+    }
     expect(
       (
         screen.getByLabelText(
@@ -101,11 +121,11 @@ for (const locale of ["en", "fr", "ar"] as const) {
     ) as HTMLTextAreaElement;
     expect(notes.dir).toBe("auto");
     fireEvent.change(notes, { target: { value: "New user note" } });
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: translate(locale, "details.saveChanges"),
-      }),
-    );
+    const saveChanges = screen.getByRole("button", {
+      name: translate(locale, "details.saveChanges"),
+    });
+    expect(saveChanges.querySelector(".action-check-icon")).toBeTruthy();
+    fireEvent.click(saveChanges);
     expect(save.mock.calls.at(-1)![0].notes).toBe("New user note");
     expect(save.mock.calls.at(-1)![0].subtype).toBe("Manhwa");
     expect(save.mock.calls.at(-1)![0].providerMetadata.volumes).toBe(12);
@@ -145,6 +165,27 @@ for (const locale of ["en", "fr", "ar"] as const) {
         ) as HTMLSelectElement
       ).value,
     ).toBe("Planning");
+    for (const key of [
+      "editor.category",
+      "editor.type",
+      "details.status",
+    ] as const) {
+      const select = screen.getByLabelText(
+        translate(locale, key),
+      ) as HTMLSelectElement;
+      expect(
+        select
+          .closest(".control-select")
+          ?.querySelector("svg[aria-hidden='true']"),
+      ).toBeTruthy();
+    }
+    expect(
+      screen
+        .getByRole("button", {
+          name: translate(locale, "editor.saveToLibrary"),
+        })
+        .querySelector(".action-check-icon"),
+    ).toBeTruthy();
     expect(
       (
         screen.getByLabelText(

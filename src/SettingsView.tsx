@@ -1,4 +1,4 @@
-import { ChevronDown, Image, Library, Palette, Plug } from "lucide-react";
+import { Image, Library, Palette, Plug } from "lucide-react";
 import { defaultTheme } from "./data";
 import { storeWallpaper } from "./covers";
 import { useState } from "react";
@@ -7,6 +7,7 @@ import { OnlineSourcesSettings } from "./OnlineSourcesSettings";
 import { assetUrl } from "./assetPaths";
 import { useLocalization } from "./localization/Localization";
 import { locales } from "./localization/locale";
+import { ControlSelect } from "./ControlSelect";
 
 export function SettingsView({
   theme,
@@ -85,7 +86,7 @@ export function SettingsView({
           </button>
           <label className="locale-setting">
             {t("settings.language")}
-            <span className="control-select">
+            <ControlSelect>
               <select
                 value={locale}
                 onChange={(event) => {
@@ -107,8 +108,7 @@ export function SettingsView({
                   </option>
                 ))}
               </select>
-              <ChevronDown size={16} aria-hidden="true" />
-            </span>
+            </ControlSelect>
           </label>
           {localeError && <p role="alert">{t("errors.localeSave")}</p>}
         </div>
@@ -160,7 +160,7 @@ export function SettingsView({
           <div className="background-controls">
             <label>
               {t("settings.imageFit")}
-              <span className="control-select">
+              <ControlSelect>
                 <select
                   value={theme.imageFit}
                   onChange={(e) =>
@@ -174,8 +174,7 @@ export function SettingsView({
                   <option value="contain">{t("settings.fitContain")}</option>
                   <option value="stretch">{t("settings.fitStretch")}</option>
                 </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
+              </ControlSelect>
             </label>
             <label>
               {t("settings.dimming")}{" "}

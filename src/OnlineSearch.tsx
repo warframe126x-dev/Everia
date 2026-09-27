@@ -10,6 +10,7 @@ import {
 } from "./providers";
 import { categories, type Category, type ProviderId } from "./types";
 import { useLocalization } from "./localization/Localization";
+import { ControlSelect } from "./ControlSelect";
 import { isolateBidi } from "./localization/bidi";
 
 type Notice = {
@@ -148,16 +149,18 @@ export function OnlineSearch({
       <div className="online-search-controls">
         <label>
           {t("editor.category")}
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value as Category)}
-          >
-            {categories.map((value) => (
-              <option key={value} value={value}>
-                {categoryLabel(value, locale)}
-              </option>
-            ))}
-          </select>
+          <ControlSelect>
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value as Category)}
+            >
+              {categories.map((value) => (
+                <option key={value} value={value}>
+                  {categoryLabel(value, locale)}
+                </option>
+              ))}
+            </select>
+          </ControlSelect>
         </label>
         <label className="online-query">
           {t("search.providerQuery", {

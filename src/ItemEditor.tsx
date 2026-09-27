@@ -10,6 +10,7 @@ import { Cover } from "./Cover";
 import { storeCover } from "./covers";
 import { OnlineSearch } from "./OnlineSearch";
 import { candidateToDraft } from "./providers";
+import { ControlSelect } from "./ControlSelect";
 
 import {
   categories,
@@ -154,63 +155,69 @@ export function ItemEditor({
               </label>
               <label>
                 {t("editor.category")}
-                <select
-                  value={draft.category}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      category: e.target.value as Category,
-                      subtype: undefined,
-                    })
-                  }
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {categoryLabel(c, locale)}
-                    </option>
-                  ))}
-                </select>
+                <ControlSelect>
+                  <select
+                    value={draft.category}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        category: e.target.value as Category,
+                        subtype: undefined,
+                      })
+                    }
+                  >
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {categoryLabel(c, locale)}
+                      </option>
+                    ))}
+                  </select>
+                </ControlSelect>
               </label>
               {draft.category === "manga" && (
                 <label>
                   {t("editor.type")}
-                  <select
-                    value={draft.subtype ?? "Manga"}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        subtype: e.target.value as MediaItem["subtype"],
-                      })
-                    }
-                  >
-                    {(["Manga", "Manhwa", "Manhua"] as const).map((value) => (
-                      <option key={value} value={value}>
-                        {subtypeLabel(value, locale)}
-                      </option>
-                    ))}
-                  </select>
+                  <ControlSelect>
+                    <select
+                      value={draft.subtype ?? "Manga"}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          subtype: e.target.value as MediaItem["subtype"],
+                        })
+                      }
+                    >
+                      {(["Manga", "Manhwa", "Manhua"] as const).map((value) => (
+                        <option key={value} value={value}>
+                          {subtypeLabel(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </ControlSelect>
                 </label>
               )}
               {draft.category === "novels" && (
                 <label>
                   {t("editor.type")}
-                  <select
-                    value={draft.subtype ?? "Novel"}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        subtype: e.target.value as MediaItem["subtype"],
-                      })
-                    }
-                  >
-                    {(["Novel", "Light Novel", "Web Novel"] as const).map(
-                      (value) => (
-                        <option key={value} value={value}>
-                          {subtypeLabel(value, locale)}
-                        </option>
-                      ),
-                    )}
-                  </select>
+                  <ControlSelect>
+                    <select
+                      value={draft.subtype ?? "Novel"}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          subtype: e.target.value as MediaItem["subtype"],
+                        })
+                      }
+                    >
+                      {(["Novel", "Light Novel", "Web Novel"] as const).map(
+                        (value) => (
+                          <option key={value} value={value}>
+                            {subtypeLabel(value, locale)}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </ControlSelect>
                 </label>
               )}
               <label>
@@ -318,23 +325,25 @@ export function ItemEditor({
               )}
               <label>
                 {t("details.status")}
-                <select
-                  value={draft.status}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      status: e.target.value as ReadingStatus,
-                    })
-                  }
-                >
-                  {statusOptions(draft.category, locale).map(
-                    ({ value, label }) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ),
-                  )}
-                </select>
+                <ControlSelect>
+                  <select
+                    value={draft.status}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        status: e.target.value as ReadingStatus,
+                      })
+                    }
+                  >
+                    {statusOptions(draft.category, locale).map(
+                      ({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </ControlSelect>
               </label>
               <label>
                 {t("editor.rating")}
@@ -401,7 +410,7 @@ export function ItemEditor({
                 {t("common.cancel")}
               </button>
               <button className="primary" disabled={busy}>
-                <Check size={18} />{" "}
+                <Check className="action-check-icon" size={18} />{" "}
                 {busy ? t("editor.savingLocal") : t("editor.saveToLibrary")}
               </button>
             </div>
