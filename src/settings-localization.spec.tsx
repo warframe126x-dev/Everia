@@ -127,6 +127,41 @@ for (const locale of ["en", "fr", "ar"] as const) {
     ).toBeDefined();
     expect(screen.getByAltText("The Movie Database (TMDB)")).toBeDefined();
   });
+
+  test(`${locale} Settings form controls keep native semantics with independent indicators and start-aligned content`, () => {
+    bridge();
+    const setTheme = vi.fn();
+    const { container } = render(
+      <LocalizationProvider initialLocale={locale}>
+        <SettingsView theme={defaultTheme} setTheme={setTheme} />
+      </LocalizationProvider>,
+    );
+    const language = screen.getByLabelText(
+      translate(locale, "settings.language"),
+    ) as HTMLSelectElement;
+    const imageFit = screen.getByLabelText(
+      translate(locale, "settings.imageFit"),
+    ) as HTMLSelectElement;
+    for (const select of [language, imageFit]) {
+      const wrapper = select.closest(".control-select")!;
+      expect(wrapper.querySelector("svg[aria-hidden='true']")).toBeTruthy();
+      expect(wrapper.querySelectorAll("select")).toHaveLength(1);
+    }
+    fireEvent.change(imageFit, { target: { value: "contain" } });
+    expect(setTheme).toHaveBeenCalledWith({
+      ...defaultTheme,
+      imageFit: "contain",
+    });
+    const file = screen.getByLabelText(
+      translate(locale, "settings.chooseWallpaper"),
+    ) as HTMLInputElement;
+    expect(file.type).toBe("file");
+    expect(file.accept).toContain("image/png");
+    const background = container.querySelector(".background-modes button")!;
+    expect(background.querySelector("strong")).toBeTruthy();
+    expect(background.querySelector("span")).toBeTruthy();
+    expect(document.documentElement.dir).toBe(locale === "ar" ? "rtl" : "ltr");
+  });
 }
 
 test("language selector persists only semantic locale values and updates Settings immediately", () => {

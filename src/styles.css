@@ -278,7 +278,9 @@ main {
   flex: none;
 }
 .add-button-content {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -338,9 +340,39 @@ select {
   padding-block: 10px;
   padding-inline: 12px 34px;
 }
+.control-select {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+}
+.control-select select,
+.control-select svg {
+  grid-area: 1 / 1;
+}
+.control-select select {
+  width: 100%;
+  appearance: none;
+  line-height: 1.25;
+  text-align: start;
+}
+.control-select svg {
+  justify-self: end;
+  margin-inline-end: 12px;
+  color: var(--accent);
+  pointer-events: none;
+}
 input,
 textarea {
   padding: 11px 12px;
+}
+input[type="file"] {
+  line-height: 1.25;
+}
+input[type="file"]::file-selector-button {
+  font: inherit;
+  line-height: inherit;
+  margin-inline-end: 8px;
+  vertical-align: middle;
 }
 textarea {
   resize: vertical;

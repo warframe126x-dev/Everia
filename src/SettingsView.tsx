@@ -1,4 +1,4 @@
-import { Image, Library, Palette, Plug } from "lucide-react";
+import { ChevronDown, Image, Library, Palette, Plug } from "lucide-react";
 import { defaultTheme } from "./data";
 import { storeWallpaper } from "./covers";
 import { useState } from "react";
@@ -85,27 +85,30 @@ export function SettingsView({
           </button>
           <label className="locale-setting">
             {t("settings.language")}
-            <select
-              value={locale}
-              onChange={(event) => {
-                try {
-                  setLocale(event.target.value as typeof locale);
-                  setLocaleError(false);
-                } catch {
-                  setLocaleError(true);
-                }
-              }}
-            >
-              {locales.map((value) => (
-                <option key={value} value={value}>
-                  {value === "en"
-                    ? "English"
-                    : value === "fr"
-                      ? "Français"
-                      : "العربية"}
-                </option>
-              ))}
-            </select>
+            <span className="control-select">
+              <select
+                value={locale}
+                onChange={(event) => {
+                  try {
+                    setLocale(event.target.value as typeof locale);
+                    setLocaleError(false);
+                  } catch {
+                    setLocaleError(true);
+                  }
+                }}
+              >
+                {locales.map((value) => (
+                  <option key={value} value={value}>
+                    {value === "en"
+                      ? "English"
+                      : value === "fr"
+                        ? "Français"
+                        : "العربية"}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
           </label>
           {localeError && <p role="alert">{t("errors.localeSave")}</p>}
         </div>
@@ -157,19 +160,22 @@ export function SettingsView({
           <div className="background-controls">
             <label>
               {t("settings.imageFit")}
-              <select
-                value={theme.imageFit}
-                onChange={(e) =>
-                  setTheme({
-                    ...theme,
-                    imageFit: e.target.value as BackgroundFit,
-                  })
-                }
-              >
-                <option value="cover">{t("settings.fitCover")}</option>
-                <option value="contain">{t("settings.fitContain")}</option>
-                <option value="stretch">{t("settings.fitStretch")}</option>
-              </select>
+              <span className="control-select">
+                <select
+                  value={theme.imageFit}
+                  onChange={(e) =>
+                    setTheme({
+                      ...theme,
+                      imageFit: e.target.value as BackgroundFit,
+                    })
+                  }
+                >
+                  <option value="cover">{t("settings.fitCover")}</option>
+                  <option value="contain">{t("settings.fitContain")}</option>
+                  <option value="stretch">{t("settings.fitStretch")}</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
             </label>
             <label>
               {t("settings.dimming")}{" "}
