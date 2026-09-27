@@ -1939,7 +1939,7 @@ textarea {
     width: 100%;
     justify-content: space-between;
   }
-  .sort-control span {
+  .sort-control > span:first-child {
     display: none;
   }
   .item-grid {
