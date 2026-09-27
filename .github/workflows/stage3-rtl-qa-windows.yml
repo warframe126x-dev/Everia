@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
+      SOURCE_SHA: e63b7e0f4debc0fb7e9ed12168a637a8437a78a1
+      SPLIT_BASE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
       PREVIOUS_CORRECTION_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
       TOOLBAR_CORRECTION_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
       ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
@@ -27,7 +28,7 @@ jobs:
       V08_SHA: 3afde654fe41d10fc5ea8ea80eed0ee5ffb3de1e
       PACKAGE_DIR: release/Everia-win32-x64
       VERIFICATION_DIR: verification
-      FINAL_ZIP: Everia-v1.0-Stage3-SharedControls-QA-win-x64.zip
+      FINAL_ZIP: Everia-v1.0-Stage3-SplitControls-QA-win-x64.zip
 
     steps:
       - name: Check out the exact Stage 3 correction source
@@ -64,7 +65,8 @@ jobs:
               (git rev-parse "$env:ZOOM_CORRECTION_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA -or
               (git rev-parse "$env:TOOLBAR_CORRECTION_SHA^1").Trim() -ne $env:ZOOM_CORRECTION_SHA -or
               (git rev-parse "$env:PREVIOUS_CORRECTION_SHA^1").Trim() -ne $env:TOOLBAR_CORRECTION_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:PREVIOUS_CORRECTION_SHA) {
+              (git rev-parse "$env:SPLIT_BASE_SHA^1").Trim() -ne $env:PREVIOUS_CORRECTION_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:SPLIT_BASE_SHA) {
             throw "The correction is not descended directly from the approved Stage 3 candidate."
           }
           if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
@@ -655,6 +657,7 @@ jobs:
             const details = await state();
             controlDiagnostics.detailsStatus = await measure('.status-select-wrap select');
             controlDiagnostics.statusDot = await measure('.status-select-wrap i.status');
+            controlDiagnostics.detailsChevron = await measure('.status-select-wrap .control-select svg');
             controlDiagnostics.fonts.detailsStatus = await platformFonts('.status-select-wrap select');
             if (details.horizontalOverflow) throw new Error(target.name + " details overflowed horizontally.");
             await capture(target.name + "-entry-details");
@@ -856,7 +859,24 @@ jobs:
               if (controlLayout.length !== 2 || controlLayout.some((control) => !control.native || control.appearance !== 'none' ||
                   Math.abs(control.dy) > 1 || control.textAlign !== 'start' || (locale === 'ar' ? control.dx >= 0 : control.dx <= 0)))
                 throw new Error(`Incorrect ${locale} Settings control alignment: ${JSON.stringify(controlLayout)}`);
-              reports.push({ locale, ...state, layout, controlLayout });
+              await evaluate("document.querySelector('.add-button').click()");
+              await pause(250);
+              await evaluate("document.querySelectorAll('.add-mode-toggle button')[1].click()");
+              await pause(250);
+              const editorSelects = await evaluate(`(() => {
+                const center = (node) => { const r = node.getBoundingClientRect(); return { x:r.x+r.width/2, y:r.y+r.height/2 }; };
+                return [...document.querySelectorAll('.form-grid .control-select')].map((wrapper) => {
+                  const select = wrapper.querySelector('select'), arrow = wrapper.querySelector('svg');
+                  return { appearance:getComputedStyle(select).appearance, lineHeight:getComputedStyle(select).lineHeight,
+                    height:select.getBoundingClientRect().height, dy:center(arrow).y-center(select).y,
+                    dx:center(arrow).x-center(select).x, options:select.options.length };
+                });
+              })()`);
+              if (editorSelects.length < 2 || editorSelects.some((control) => control.appearance !== 'none' ||
+                  control.lineHeight === 'normal' || Math.abs(control.dy) > 1 || control.options < 2 ||
+                  (locale === 'ar' ? control.dx >= 0 : control.dx <= 0)))
+                throw new Error(`Incorrect ${locale} Add/Edit select presentation: ${JSON.stringify(editorSelects)}`);
+              reports.push({ locale, ...state, layout, controlLayout, editorSelects });
               if (next) await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(next))})`);
               try { await evaluate("window.close()"); } catch { /* Window may close before CDP replies. */ }
               for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++) await pause(250);
@@ -899,13 +919,14 @@ jobs:
           }
           $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
 
-          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-SharedControls-QA-win-x64"
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-SplitControls-QA-win-x64"
           New-Item -ItemType Directory -Force -Path $delivery | Out-Null
           Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
           Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
           @(
             "Everia v1.0 Stage 3 correction portable QA — not a release or installer"
             "Built from exact source commit: $env:SOURCE_SHA"
+            "Add item's real-PC visual alignment remains unresolved; this build validates the split select and indicator correction."
             "The executable retains the existing 0.9.0 metadata because this QA stage does not bump the application version."
             "Everia-win32-x64/Everia.exe is the exact executable that passed the launch, Home-screen, responsive-view, and scrollbar-geometry tests."
           ) | Set-Content (Join-Path $delivery "README-FIRST.txt") -Encoding utf8
@@ -975,8 +996,8 @@ jobs:
       - name: Upload exact launch-tested delivery
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-SharedControls-QA-win-x64
-          path: Everia-v1.0-Stage3-SharedControls-QA-win-x64.zip
+          name: Everia-v1.0-Stage3-SplitControls-QA-win-x64
+          path: Everia-v1.0-Stage3-SplitControls-QA-win-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -984,7 +1005,7 @@ jobs:
       - name: Upload launch evidence
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-SharedControls-QA-verification
+          name: Everia-v1.0-Stage3-SplitControls-QA-verification
           path: verification
           if-no-files-found: error
           retention-days: 30
