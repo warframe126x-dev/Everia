@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
-import type {
-  ProviderConfiguration,
-  ProviderResponse,
-} from "./providers/types";
+import { useEffect, useState } from "react";
+import type { ProviderConfiguration } from "./providers/types";
 import type { ProviderId } from "./types";
 import { useLocalization } from "./localization/Localization";
 import { isolateBidi } from "./localization/bidi";
 import type { StringKey } from "./localization/format";
+import type { CredentialChange, CredentialProvider } from "./settingsDraft";
 
 const categoryKeys: Record<ProviderId, StringKey> = {
   igdb: "providers.games",
@@ -17,7 +15,6 @@ const categoryKeys: Record<ProviderId, StringKey> = {
   tenrai: "providers.animeManga",
   jikan: "providers.animeManga",
 };
-type Action = "save" | "test" | "remove";
 type Notice = { key: StringKey; provider?: string };
 const failureKeys: Record<string, StringKey> = {
   "credential-unreadable": "providers.credentialUnreadable",
@@ -33,17 +30,19 @@ const failureKeys: Record<string, StringKey> = {
 const failureKey = (code?: string): StringKey =>
   (code && failureKeys[code]) || "providers.operationFailed";
 
-export function OnlineSourcesSettings() {
+export function OnlineSourcesSettings({
+  changes,
+  onChange,
+}: {
+  changes: Partial<Record<CredentialProvider, CredentialChange>>;
+  onChange: (
+    next: Partial<Record<CredentialProvider, CredentialChange>>,
+  ) => void;
+}) {
   const { t } = useLocalization();
   const [providers, setProviders] = useState<ProviderConfiguration[]>([]);
   const [busy, setBusy] = useState<ProviderId>();
-  const [busyAction, setBusyAction] = useState<Action>();
   const [message, setMessage] = useState<Notice>();
-  const igdbClientId = useRef<HTMLInputElement>(null);
-  const igdbSecret = useRef<HTMLInputElement>(null);
-  const tmdbToken = useRef<HTMLInputElement>(null);
-  const rawgKey = useRef<HTMLInputElement>(null);
-  const omdbKey = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
     if (!window.everiaProviders?.configuration) {
@@ -59,77 +58,85 @@ export function OnlineSourcesSettings() {
     }
   };
   useEffect(() => {
-    void refresh();
-  }, []);
+    if (Object.values(changes).every((change) => !change)) void refresh();
+  }, [changes]);
 
-  const perform = async (
-    provider: ProviderId,
-    action: Action,
-    operation: () => Promise<ProviderResponse<unknown>>,
-  ) => {
+  const editToken = (provider: "tmdb" | "rawg" | "omdb", token: string) => {
+    const next = { ...changes };
+    if (token) next[provider] = { kind: "save", credentials: { token } };
+    else delete next[provider];
+    onChange(next);
+  };
+  const editIgdb = (key: "clientId" | "clientSecret", value: string) => {
+    const current =
+      changes.igdb?.kind === "save" && "clientId" in changes.igdb.credentials
+        ? changes.igdb.credentials
+        : { clientId: "", clientSecret: "" };
+    const fields = { ...current, [key]: value };
+    const next = { ...changes };
+    if (fields.clientId || fields.clientSecret)
+      next.igdb = { kind: "save", credentials: fields };
+    else delete next.igdb;
+    onChange(next);
+  };
+  const toggleRemoval = (provider: CredentialProvider) => {
+    const next = { ...changes };
+    if (next[provider]?.kind === "remove") delete next[provider];
+    else next[provider] = { kind: "remove" };
+    onChange(next);
+  };
+  const tokenValue = (provider: "tmdb" | "rawg" | "omdb") => {
+    const change = changes[provider];
+    return change?.kind === "save" && "token" in change.credentials
+      ? change.credentials.token
+      : "";
+  };
+  const test = async (provider: ProviderId) => {
     setBusy(provider);
-    setBusyAction(action);
     setMessage(undefined);
     const providerName =
       providers.find((item) => item.id === provider)?.name ?? provider;
     try {
-      const response = await operation();
+      const pending = changes[provider as CredentialProvider];
+      if (pending?.kind === "remove") {
+        setMessage({
+          key: "providers.notConfiguredHelp",
+          provider: providerName,
+        });
+        return;
+      }
+      if (
+        pending?.kind === "save" &&
+        Object.values(pending.credentials).some((value) => !value.trim())
+      ) {
+        setMessage({
+          key: "providers.credentialRequired",
+          provider: providerName,
+        });
+        return;
+      }
+      const response =
+        pending?.kind === "save"
+          ? await window.everiaProviders!.testDraftCredentials({
+              provider: provider as CredentialProvider,
+              credentials: pending.credentials as { token: string },
+            })
+          : await window.everiaProviders!.testConnection(provider);
       setMessage({
         key: response.ok
-          ? action === "remove"
-            ? "providers.removed"
+          ? pending
+            ? "providers.draftTestPassed"
             : "providers.connected"
           : failureKey(response.errorCode),
         provider: providerName,
       });
-      await refresh();
+      if (!pending) await refresh();
     } catch {
       setMessage({ key: "providers.operationFailed", provider: providerName });
     } finally {
       setBusy(undefined);
-      setBusyAction(undefined);
     }
   };
-
-  const saveIgdb = () =>
-    perform("igdb", "save", async () => {
-      try {
-        return await window.everiaProviders!.saveCredentials({
-          provider: "igdb",
-          credentials: {
-            clientId: igdbClientId.current?.value,
-            clientSecret: igdbSecret.current?.value,
-          },
-        });
-      } finally {
-        if (igdbSecret.current) igdbSecret.current.value = "";
-      }
-    });
-  const saveTmdb = () =>
-    perform("tmdb", "save", async () => {
-      try {
-        return await window.everiaProviders!.saveCredentials({
-          provider: "tmdb",
-          credentials: { token: tmdbToken.current?.value },
-        });
-      } finally {
-        if (tmdbToken.current) tmdbToken.current.value = "";
-      }
-    });
-  const saveKey = (
-    provider: "rawg" | "omdb",
-    input: RefObject<HTMLInputElement | null>,
-  ) =>
-    perform(provider, "save", async () => {
-      try {
-        return await window.everiaProviders!.saveCredentials({
-          provider,
-          credentials: { token: input.current?.value },
-        });
-      } finally {
-        if (input.current) input.current.value = "";
-      }
-    });
 
   const stateLabel = (provider: ProviderConfiguration) =>
     provider.state === "connected"
@@ -143,20 +150,6 @@ export function OnlineSourcesSettings() {
                 : "providers.stateAvailable",
             )
           : t("providers.stateNotConfigured");
-  const actionLabel = (
-    provider: ProviderId,
-    action: Action,
-    idle: StringKey,
-  ) =>
-    busy === provider && busyAction === action
-      ? t(
-          action === "test"
-            ? "providers.testing"
-            : action === "remove"
-              ? "providers.removing"
-              : "providers.saving",
-        )
-      : t(idle);
 
   return (
     <div className="provider-settings-grid">
@@ -192,9 +185,14 @@ export function OnlineSourcesSettings() {
               <label>
                 {t("providers.clientId")}
                 <input
-                  ref={igdbClientId}
                   dir="ltr"
-                  defaultValue=""
+                  value={
+                    changes.igdb?.kind === "save" &&
+                    "clientId" in changes.igdb.credentials
+                      ? changes.igdb.credentials.clientId
+                      : ""
+                  }
+                  onChange={(event) => editIgdb("clientId", event.target.value)}
                   placeholder={
                     provider.clientIdHint || t("providers.twitchClientId")
                   }
@@ -204,9 +202,17 @@ export function OnlineSourcesSettings() {
               <label>
                 {t("providers.clientSecret")}
                 <input
-                  ref={igdbSecret}
                   dir="ltr"
                   type="password"
+                  value={
+                    changes.igdb?.kind === "save" &&
+                    "clientSecret" in changes.igdb.credentials
+                      ? changes.igdb.credentials.clientSecret
+                      : ""
+                  }
+                  onChange={(event) =>
+                    editIgdb("clientSecret", event.target.value)
+                  }
                   placeholder={
                     provider.configured
                       ? t("providers.savedSecurely")
@@ -222,9 +228,15 @@ export function OnlineSourcesSettings() {
               <label>
                 {t("providers.readToken")}
                 <input
-                  ref={tmdbToken}
                   dir="ltr"
                   type="password"
+                  value={
+                    changes.tmdb?.kind === "save" &&
+                    "token" in changes.tmdb.credentials
+                      ? changes.tmdb.credentials.token
+                      : ""
+                  }
+                  onChange={(event) => editToken("tmdb", event.target.value)}
                   placeholder={
                     provider.configured
                       ? t("providers.savedSecurely")
@@ -240,9 +252,15 @@ export function OnlineSourcesSettings() {
               <label>
                 {t("providers.apiKey")}
                 <input
-                  ref={provider.id === "rawg" ? rawgKey : omdbKey}
                   dir="ltr"
                   type="password"
+                  value={tokenValue(provider.id as "rawg" | "omdb")}
+                  onChange={(event) =>
+                    editToken(
+                      provider.id as "rawg" | "omdb",
+                      event.target.value,
+                    )
+                  }
                   placeholder={
                     provider.configured
                       ? t("providers.savedSecurely")
@@ -259,69 +277,38 @@ export function OnlineSourcesSettings() {
             <p className="no-configuration">{t("providers.noConfiguration")}</p>
           )}
           <div className="provider-actions">
-            {provider.id === "igdb" && (
-              <button
-                className="primary"
-                disabled={busy === provider.id}
-                onClick={() => void saveIgdb()}
-              >
-                {actionLabel(provider.id, "save", "providers.saveConnect")}
-              </button>
-            )}
-            {provider.id === "tmdb" && (
-              <button
-                className="primary"
-                disabled={busy === provider.id}
-                onClick={() => void saveTmdb()}
-              >
-                {actionLabel(provider.id, "save", "providers.saveConnect")}
-              </button>
-            )}
-            {provider.id === "rawg" && (
-              <button
-                className="primary"
-                disabled={busy === provider.id}
-                onClick={() => void saveKey("rawg", rawgKey)}
-              >
-                {actionLabel(provider.id, "save", "providers.saveConnect")}
-              </button>
-            )}
-            {provider.id === "omdb" && (
-              <button
-                className="primary"
-                disabled={busy === provider.id}
-                onClick={() => void saveKey("omdb", omdbKey)}
-              >
-                {actionLabel(provider.id, "save", "providers.saveConnect")}
-              </button>
+            {changes[provider.id as CredentialProvider] && (
+              <span className="provider-pending">
+                {t(
+                  changes[provider.id as CredentialProvider]?.kind === "remove"
+                    ? "providers.pendingRemoval"
+                    : "providers.pending",
+                )}
+              </span>
             )}
             <button
               className="secondary"
               disabled={busy === provider.id}
-              onClick={() =>
-                void perform(provider.id, "test", () =>
-                  window.everiaProviders!.testConnection(provider.id),
-                )
-              }
+              onClick={() => void test(provider.id)}
             >
-              {actionLabel(provider.id, "test", "providers.testConnection")}
+              {busy === provider.id
+                ? t("providers.testing")
+                : t("providers.testConnection")}
             </button>
             {provider.requiresCredentials && (
               <button
                 className="quiet-danger"
-                disabled={!provider.configured || busy === provider.id}
-                onClick={() =>
-                  void perform(provider.id, "remove", () =>
-                    window.everiaProviders!.removeCredentials(
-                      provider.id as "igdb" | "rawg" | "tmdb" | "omdb",
-                    ),
-                  )
+                disabled={
+                  (!provider.configured &&
+                    !changes[provider.id as CredentialProvider]) ||
+                  busy === provider.id
                 }
+                onClick={() => toggleRemoval(provider.id as CredentialProvider)}
               >
-                {actionLabel(
-                  provider.id,
-                  "remove",
-                  "providers.removeCredentials",
+                {t(
+                  changes[provider.id as CredentialProvider]?.kind === "remove"
+                    ? "providers.cancelRemoval"
+                    : "providers.removeCredentials",
                 )}
               </button>
             )}

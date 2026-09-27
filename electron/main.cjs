@@ -230,9 +230,17 @@ ipcMain.handle("backup:begin-restore", backupHandler((_window, data) => backupSt
 ipcMain.handle("backup:finish-restore", backupHandler(() => backupStore.finishRestore()));
 ipcMain.handle("backup:choose-destination", backupHandler(async (window) => {
   const selected = await dialog.showOpenDialog(window, { properties: ["openDirectory", "createDirectory"] });
-  return selected.canceled ? null : backupStore.setConfig({ destination: selected.filePaths[0] });
+  return selected.canceled ? null : selected.filePaths[0];
 }));
 ipcMain.handle("backup:set-enabled", backupHandler((_window, enabled) => backupStore.setConfig({ enabled })));
+ipcMain.handle("backup:set-config", backupHandler((_window, input) => {
+  if (!input || typeof input !== "object" || Array.isArray(input) ||
+      !Object.keys(input).every((key) => ["destination", "enabled", "destinationSelected"].includes(key)) ||
+      Object.keys(input).length === 0)
+    throw new Error("Invalid backup configuration.");
+  return backupStore.setConfig(input);
+}));
+ipcMain.handle("backup:system-drive", backupHandler(() => path.parse(app.getPath("userData")).root));
 ipcMain.handle("backup:select", backupHandler(async (window) => {
   const selected = await dialog.showOpenDialog(window, {
     properties: ["openFile"], filters: [{ name: "Everia Backup", extensions: ["everiabackup"] }],
@@ -241,6 +249,16 @@ ipcMain.handle("backup:select", backupHandler(async (window) => {
 }));
 ipcMain.handle("providers:test-draft", backupHandler((_window, input) =>
   testDraftRequest(input, providers.testDraftCredentials)));
+ipcMain.handle("providers:apply-draft", backupHandler((_window, operations) => {
+  try {
+    credentialStore.applyBatch(operations);
+    for (const operation of operations) providers.resetProviderSession(operation.provider);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, errorCode: ["credential-required", "invalid-request", "protection-unavailable", "credential-unreadable"].includes(error?.code)
+      ? error.code : "operation-failed" };
+  }
+}));
 
 app.whenReady().then(() => {
   backupStore = createBackupStore(

@@ -1,16 +1,18 @@
 import { afterEach, expect, test, vi } from "vitest";
+import "fake-indexeddb/auto";
+import { webcrypto } from "node:crypto";
 import {
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { LocalizationProvider } from "./localization/Localization";
 import { translate } from "./localization/format";
 import type { Locale } from "./localization/locale";
-import { SettingsView } from "./SettingsView";
-import { defaultTheme } from "./data";
+import App from "./App";
 
 const providers = [
   {
@@ -63,17 +65,28 @@ function bridge() {
   vi.stubGlobal("everiaProviders", {
     configuration,
     saveCredentials,
+    testDraftCredentials: vi
+      .fn()
+      .mockResolvedValue({ ok: false, errorCode: "credential-unreadable" }),
     testConnection: vi.fn().mockResolvedValue({ ok: true }),
     removeCredentials: vi.fn().mockResolvedValue({ ok: true }),
   });
   return { saveCredentials };
 }
-const show = (locale: Locale) =>
-  render(
+const show = (locale: Locale) => {
+  localStorage.setItem("everia.locale.v1", JSON.stringify(locale));
+  const result = render(
     <LocalizationProvider initialLocale={locale}>
-      <SettingsView theme={defaultTheme} setTheme={() => {}} />
+      <App />
     </LocalizationProvider>,
   );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: translate(locale, "navigation.settings"),
+    }),
+  );
+  return result;
+};
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -130,12 +143,7 @@ for (const locale of ["en", "fr", "ar"] as const) {
 
   test(`${locale} Settings form controls keep native semantics with independent indicators and start-aligned content`, () => {
     bridge();
-    const setTheme = vi.fn();
-    const { container } = render(
-      <LocalizationProvider initialLocale={locale}>
-        <SettingsView theme={defaultTheme} setTheme={setTheme} />
-      </LocalizationProvider>,
-    );
+    const { container } = show(locale);
     const language = screen.getByLabelText(
       translate(locale, "settings.language"),
     ) as HTMLSelectElement;
@@ -148,10 +156,8 @@ for (const locale of ["en", "fr", "ar"] as const) {
       expect(wrapper.querySelectorAll("select")).toHaveLength(1);
     }
     fireEvent.change(imageFit, { target: { value: "contain" } });
-    expect(setTheme).toHaveBeenCalledWith({
-      ...defaultTheme,
-      imageFit: "contain",
-    });
+    expect((imageFit as HTMLSelectElement).value).toBe("contain");
+    expect(localStorage.getItem("everia.theme.v1")).toBeNull();
     const file = screen.getByLabelText(
       translate(locale, "settings.chooseWallpaper"),
     ) as HTMLInputElement;
@@ -164,7 +170,7 @@ for (const locale of ["en", "fr", "ar"] as const) {
   });
 }
 
-test("language selector persists only semantic locale values and updates Settings immediately", () => {
+test("language selector previews semantic locale values and persists only on Apply", async () => {
   bridge();
   show("en");
   const select = screen.getByLabelText("Language") as HTMLSelectElement;
@@ -176,16 +182,24 @@ test("language selector persists only semantic locale values and updates Setting
     ["ar", "العربية"],
   ]);
   fireEvent.change(select, { target: { value: "fr" } });
-  expect(localStorage.getItem("everia.locale.v1")).toBe('"fr"');
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
   expect(document.documentElement.lang).toBe("fr");
   expect(document.documentElement.dir).toBe("ltr");
   expect(screen.getByRole("heading", { name: "Apparence" })).toBeDefined();
   fireEvent.change(screen.getByLabelText("Langue"), {
     target: { value: "ar" },
   });
-  expect(localStorage.getItem("everia.locale.v1")).toBe('"ar"');
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
   expect(document.documentElement.lang).toBe("ar");
   expect(document.documentElement.dir).toBe("rtl");
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: translate("ar", "settings.applyChanges"),
+    }),
+  );
+  await waitFor(() =>
+    expect(localStorage.getItem("everia.locale.v1")).toBe('"ar"'),
+  );
 });
 
 test("credential error code localizes without rendering diagnostic or altering secret", async () => {
@@ -197,23 +211,24 @@ test("credential error code localizes without rendering diagnostic or altering s
   fireEvent.change(input, { target: { value: "private-value" } });
   fireEvent.click(
     screen.getAllByRole("button", {
-      name: translate("fr", "providers.saveConnect"),
+      name: translate("fr", "providers.testConnection"),
     })[2],
   );
   await waitFor(() =>
-    expect(saveCredentials).toHaveBeenCalledWith({
-      provider: "tmdb",
-      credentials: { token: "private-value" },
-    }),
+    expect(
+      screen.getAllByText(translate("fr", "providers.credentialUnreadable"))
+        .length,
+    ).toBeGreaterThan(0),
   );
-  expect((input as HTMLInputElement).value).toBe("");
+  expect(saveCredentials).not.toHaveBeenCalled();
+  expect((input as HTMLInputElement).value).toBe("private-value");
   expect(screen.queryByText("untranslated developer diagnostic")).toBeNull();
   expect(
     screen.getAllByText(translate("fr", "providers.credentialUnreadable"))
       .length,
   ).toBeGreaterThan(0);
 });
-test("failed locale persistence retains selection and shows localized error", () => {
+test("failed locale Apply retains draft and shows localized error", async () => {
   bridge();
   show("fr");
   const native = Storage.prototype.setItem;
@@ -226,11 +241,266 @@ test("failed locale persistence retains selection and shows localized error", ()
   fireEvent.change(screen.getByLabelText("Langue"), {
     target: { value: "ar" },
   });
-  expect((screen.getByLabelText("Langue") as HTMLSelectElement).value).toBe(
-    "fr",
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: translate("ar", "settings.applyChanges"),
+    }),
   );
-  expect(screen.getByRole("alert").textContent).toBe(
-    translate("fr", "errors.localeSave"),
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toBe(
+      translate("ar", "settings.applyFailure"),
+    ),
   );
+  expect(
+    (
+      screen.getByLabelText(
+        translate("ar", "settings.language"),
+      ) as HTMLSelectElement
+    ).value,
+  ).toBe("ar");
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"fr"');
   expect(screen.queryByText(/disk full diagnostic/)).toBeNull();
+});
+
+test("dirty Settings guards navigation with Keep Editing, Discard, and Apply", async () => {
+  bridge();
+  show("en");
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "ar" },
+  });
+  expect(document.documentElement.dir).toBe("rtl");
+  fireEvent.click(
+    screen.getByRole("button", { name: translate("ar", "navigation.home") }),
+  );
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: translate("ar", "settings.keepEditing"),
+    }),
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.getByRole("heading", {
+      name: translate("ar", "navigation.settings"),
+    }),
+  ).toBeDefined();
+  fireEvent.click(
+    screen.getByRole("button", { name: translate("ar", "navigation.home") }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: translate("ar", "settings.discardChanges"),
+    }),
+  );
+  expect(document.documentElement.dir).toBe("ltr");
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "fr" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: translate("fr", "navigation.home") }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: translate("fr", "settings.applyChanges"),
+    }),
+  );
+  await waitFor(() =>
+    expect(localStorage.getItem("everia.locale.v1")).toBe('"fr"'),
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(dialog).toBeDefined();
+});
+
+test("backup location and automatic switch remain draft until Apply; OS-drive warning is factual", async () => {
+  bridge();
+  const setConfig = vi.fn().mockResolvedValue({});
+  vi.stubGlobal("everiaBackup", {
+    config: vi
+      .fn()
+      .mockResolvedValue({
+        enabled: true,
+        destination: "C:\\Users\\Chris\\Documents\\Everia Backups",
+        destinationSelected: false,
+        lastSuccess: null,
+        lastFailure: null,
+        version: 1,
+      }),
+    systemDrive: vi.fn().mockResolvedValue("C:\\"),
+    chooseDestination: vi.fn().mockResolvedValue("D:\\Everia Backups"),
+    setConfig,
+  });
+  show("en");
+  expect(
+    await screen.findByText(translate("en", "backup.sameDriveWarning")),
+  ).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Choose Location" }));
+  await screen.findByText("D:\\Everia Backups");
+  expect(
+    screen.queryByText(translate("en", "backup.sameDriveWarning")),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Automatic backups" }));
+  expect(setConfig).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
+  await waitFor(() =>
+    expect(setConfig).toHaveBeenCalledWith({
+      enabled: false,
+      destination: "D:\\Everia Backups",
+    }),
+  );
+});
+
+test("dirty Settings must be resolved before Restore selects a backup", async () => {
+  bridge();
+  const selectBackup = vi.fn().mockResolvedValue("truncated backup");
+  vi.stubGlobal("everiaBackup", {
+    config: vi
+      .fn()
+      .mockResolvedValue({
+        enabled: true,
+        destination: "C:\\Backups",
+        destinationSelected: false,
+        lastSuccess: null,
+        lastFailure: null,
+        version: 1,
+      }),
+    systemDrive: vi.fn().mockResolvedValue("C:\\"),
+    selectBackup,
+  });
+  show("en");
+  await screen.findByRole("button", { name: "Restore Backup" });
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "ar" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: translate("ar", "backup.restore") }),
+  );
+  expect(screen.getByRole("dialog")).toBeDefined();
+  expect(selectBackup).not.toHaveBeenCalled();
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: translate("ar", "settings.keepEditing"),
+    }),
+  );
+  expect(selectBackup).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: translate("ar", "backup.restore") }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: translate("ar", "settings.discardChanges"),
+    }),
+  );
+  await waitFor(() => expect(selectBackup).toHaveBeenCalledTimes(1));
+  expect(document.documentElement.dir).toBe("ltr");
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
+  await screen.findByText(translate("en", "backup.invalid"));
+});
+
+test("failed Apply while navigating keeps the Settings draft and requested destination pending", async () => {
+  bridge();
+  show("en");
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "fr" },
+  });
+  const native = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(
+    function (key, value) {
+      if (key === "everia.locale.v1")
+        throw new Error("disk full secret diagnostic");
+      return native.call(this, key, value);
+    },
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: translate("fr", "navigation.home") }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: translate("fr", "settings.applyChanges"),
+    }),
+  );
+  await waitFor(() => expect(screen.getByRole("dialog")).toBeDefined());
+  expect(
+    (
+      screen.getByLabelText(
+        translate("fr", "settings.language"),
+      ) as HTMLSelectElement
+    ).value,
+  ).toBe("fr");
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
+  expect(screen.queryByText("disk full secret diagnostic")).toBeNull();
+});
+
+test("reverted locale is clean and restart before Apply loads the committed locale", () => {
+  bridge();
+  const app = show("en");
+  const apply = screen.getByRole("button", {
+    name: "Apply Changes",
+  }) as HTMLButtonElement;
+  expect(apply.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "fr" },
+  });
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Appliquer les modifications",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(false);
+  fireEvent.change(screen.getByLabelText("Langue"), {
+    target: { value: "en" },
+  });
+  expect(
+    (screen.getByRole("button", { name: "Apply Changes" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.change(screen.getByLabelText("Language"), {
+    target: { value: "ar" },
+  });
+  expect(document.documentElement.dir).toBe("rtl");
+  app.unmount();
+  show("en");
+  expect(document.documentElement.dir).toBe("ltr");
+  expect((screen.getByLabelText("Language") as HTMLSelectElement).value).toBe(
+    "en",
+  );
+  expect(localStorage.getItem("everia.locale.v1")).toBe('"en"');
+});
+
+test("a backup with a pending destination uses only the committed destination", async () => {
+  bridge();
+  vi.stubGlobal("crypto", webcrypto);
+  vi.stubGlobal("__APP_VERSION__", "1.0.0");
+  const config = vi
+    .fn()
+    .mockResolvedValue({
+      enabled: true,
+      destination: "C:\\Backups",
+      destinationSelected: false,
+      lastSuccess: null,
+      lastFailure: null,
+      version: 1,
+    });
+  const write = vi.fn().mockResolvedValue("C:\\Backups\\snapshot.everiabackup");
+  const setConfig = vi.fn();
+  vi.stubGlobal("everiaBackup", {
+    config,
+    systemDrive: vi.fn().mockResolvedValue("C:\\"),
+    chooseDestination: vi.fn().mockResolvedValue("D:\\Backups"),
+    write,
+    setConfig,
+  });
+  show("en");
+  await screen.findByText("C:\\Backups");
+  fireEvent.click(screen.getByRole("button", { name: "Choose Location" }));
+  await screen.findByText("D:\\Backups");
+  expect(
+    screen.getByText(translate("en", "backup.usesCommittedLocation")),
+  ).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Back Up Now" }));
+  await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+  expect(setConfig).not.toHaveBeenCalled();
 });

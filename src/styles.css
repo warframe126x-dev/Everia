@@ -1673,6 +1673,67 @@ textarea {
   color: #9ba8b0;
   font-size: 10px;
 }
+.provider-pending {
+  color: var(--accent);
+  font-size: 10px;
+}
+.settings-apply {
+  margin: 0 0 28px;
+}
+.backup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+.backup-location {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.backup-location code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.backup-location button {
+  justify-self: start;
+}
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+.settings-content .backup-drive-warning {
+  color: #e6bc7a;
+}
+.settings-exit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.7);
+}
+.settings-exit-dialog {
+  width: min(100%, 510px);
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #101b22;
+  color: var(--text);
+}
+.settings-exit-dialog h2 {
+  font-size: 18px;
+  line-height: 1.5;
+}
+.settings-exit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
 .color-settings {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

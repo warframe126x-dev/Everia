@@ -67,6 +67,15 @@ test("failed replacement cannot delete last good backup or unrelated files", () 
   assert(fs.existsSync(first));
   assert(fs.existsSync(path.join(destination,"personal.txt")));
 }));
+test("draft backup configuration rollback restores default destination selection state", () => setup((store, _root, destination) => {
+  const original = store.config();
+  assert.equal(original.destinationSelected, false);
+  store.setConfig({ destination, enabled: false });
+  assert.equal(store.config().destinationSelected, true);
+  store.setConfig({ destination: original.destination, enabled: original.enabled,
+    destinationSelected: original.destinationSelected });
+  assert.deepEqual(store.config(), original);
+}));
 test("daily weekly monthly retention selects generations and one snapshot can satisfy tiers", () => {
   const files = Array.from({length:65},(_,i)=>({path:`snapshot-${i}`,createdAt:new Date(Date.UTC(2026,5,1+i)).toISOString()}));
   const kept = retention(files);

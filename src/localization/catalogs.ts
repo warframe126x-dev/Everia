@@ -1,5 +1,48 @@
 /** English defines the keys and message kinds for every locale. */
 export const en = {
+  "settings.applyChanges": "Apply Changes",
+  "settings.discardChanges": "Discard Changes",
+  "settings.keepEditing": "Keep Editing",
+  "settings.applying": "Applying…",
+  "settings.applyFailure":
+    "Changes could not be applied. Your draft is still available; check storage and try again.",
+  "settings.unsavedWarning":
+    "You have unapplied Settings changes. What would you like to do?",
+  "settings.wallpaperPending": "Image selected. Apply Changes to save it.",
+  "providers.pending": "Pending changes",
+  "providers.pendingRemoval": "Removal pending",
+  "providers.testSaved": "Testing saved credentials",
+  "providers.testDraft": "Testing pending credentials",
+  "providers.draftTestPassed":
+    "{provider} accepted the pending credentials. Apply Changes to save them.",
+  "providers.cancelRemoval": "Cancel removal",
+  "backup.heading": "Backup & Restore",
+  "backup.description":
+    "Keep recoverable copies of your library and personal images.",
+  "backup.automatic": "Automatic backups",
+  "backup.frequency": "Backup frequency",
+  "backup.daily": "Daily, while Everia is in use",
+  "backup.location": "Backup location",
+  "backup.chooseLocation": "Choose Location",
+  "backup.unavailable": "Unavailable",
+  "backup.sameDriveWarning":
+    "This location is on the Windows drive and will not protect against loss of that drive.",
+  "backup.lastSuccess": "Last successful backup",
+  "backup.never": "Never",
+  "backup.nextEligible": "Next eligible backup",
+  "backup.onUseAfter": "When Everia is in use after {date}",
+  "backup.onNextUse": "When Everia is next used",
+  "backup.lastFailure": "Last failed attempt",
+  "backup.retention": "Keeps up to 7 daily · 4 weekly · 6 monthly generations.",
+  "backup.usesCommittedLocation":
+    "Back Up Now uses your currently applied location until you apply this change.",
+  "backup.creating": "Creating backup…",
+  "backup.backUpNow": "Back Up Now",
+  "backup.restore": "Restore Backup",
+  "backup.confirmRestore":
+    "Replace your library, settings and images with the validated backup? Provider credentials will not be restored.",
+  "backup.credentialsExcluded":
+    "Provider credentials and window position are not included in portable backups.",
   "errors.localeSave": "Language could not be saved. Try again.",
   "settings.personalize": "PERSONALIZE",
   "settings.intro": "Shape Everia into a universe that feels like yours.",
@@ -291,6 +334,51 @@ export type CatalogShape = {
 };
 
 export const fr = {
+  "settings.applyChanges": "Appliquer les modifications",
+  "settings.discardChanges": "Ignorer les modifications",
+  "settings.keepEditing": "Continuer la modification",
+  "settings.applying": "Application…",
+  "settings.applyFailure":
+    "Impossible d’appliquer les modifications. Votre brouillon est conservé ; vérifiez le stockage et réessayez.",
+  "settings.unsavedWarning":
+    "Vous avez des modifications non appliquées dans les paramètres. Que souhaitez-vous faire ?",
+  "settings.wallpaperPending":
+    "Image sélectionnée. Appliquez les modifications pour l’enregistrer.",
+  "providers.pending": "Modifications en attente",
+  "providers.pendingRemoval": "Suppression en attente",
+  "providers.testSaved": "Test des identifiants enregistrés",
+  "providers.testDraft": "Test des identifiants en attente",
+  "providers.draftTestPassed":
+    "{provider} a accepté les identifiants en attente. Appliquez les modifications pour les enregistrer.",
+  "providers.cancelRemoval": "Annuler la suppression",
+  "backup.heading": "Sauvegarde et restauration",
+  "backup.description":
+    "Conservez des copies récupérables de votre collection et de vos images personnelles.",
+  "backup.automatic": "Sauvegardes automatiques",
+  "backup.frequency": "Fréquence des sauvegardes",
+  "backup.daily": "Chaque jour, pendant l’utilisation d’Everia",
+  "backup.location": "Emplacement des sauvegardes",
+  "backup.chooseLocation": "Choisir un emplacement",
+  "backup.unavailable": "Indisponible",
+  "backup.sameDriveWarning":
+    "Cet emplacement se trouve sur le disque Windows et ne protège pas contre sa perte.",
+  "backup.lastSuccess": "Dernière sauvegarde réussie",
+  "backup.never": "Jamais",
+  "backup.nextEligible": "Prochaine sauvegarde possible",
+  "backup.onUseAfter": "Pendant l’utilisation d’Everia après le {date}",
+  "backup.onNextUse": "Lors de la prochaine utilisation d’Everia",
+  "backup.lastFailure": "Dernier échec",
+  "backup.retention":
+    "Conserve jusqu’à 7 versions quotidiennes · 4 hebdomadaires · 6 mensuelles.",
+  "backup.usesCommittedLocation":
+    "Sauvegarder maintenant utilise l’emplacement appliqué tant que ce changement n’est pas appliqué.",
+  "backup.creating": "Création de la sauvegarde…",
+  "backup.backUpNow": "Sauvegarder maintenant",
+  "backup.restore": "Restaurer une sauvegarde",
+  "backup.confirmRestore":
+    "Remplacer la collection, les paramètres et les images par la sauvegarde validée ? Les identifiants des sources ne seront pas restaurés.",
+  "backup.credentialsExcluded":
+    "Les identifiants des sources et la position de la fenêtre ne figurent pas dans les sauvegardes portables.",
   "errors.localeSave": "Impossible d’enregistrer la langue. Réessayez.",
   "settings.personalize": "PERSONNALISER",
   "settings.intro": "Faites d’Everia un univers qui vous ressemble.",
@@ -585,6 +673,48 @@ export const fr = {
 } satisfies CatalogShape;
 
 export const ar = {
+  "settings.applyChanges": "تطبيق التغييرات",
+  "settings.discardChanges": "تجاهل التغييرات",
+  "settings.keepEditing": "متابعة التعديل",
+  "settings.applying": "جارٍ التطبيق…",
+  "settings.applyFailure":
+    "تعذّر تطبيق التغييرات. بقيت مسودتك متاحة؛ تحقق من التخزين وحاول مجددًا.",
+  "settings.unsavedWarning":
+    "لديك تغييرات غير مطبّقة في الإعدادات. ماذا تريد أن تفعل؟",
+  "settings.wallpaperPending": "تم اختيار الصورة. طبّق التغييرات لحفظها.",
+  "providers.pending": "تغييرات معلّقة",
+  "providers.pendingRemoval": "إزالة معلّقة",
+  "providers.testSaved": "اختبار بيانات الاعتماد المحفوظة",
+  "providers.testDraft": "اختبار بيانات الاعتماد المعلّقة",
+  "providers.draftTestPassed":
+    "قبل {provider} بيانات الاعتماد المعلّقة. طبّق التغييرات لحفظها.",
+  "providers.cancelRemoval": "إلغاء الإزالة",
+  "backup.heading": "النسخ الاحتياطي والاستعادة",
+  "backup.description": "احتفظ بنسخ قابلة للاستعادة من مكتبتك وصورك الشخصية.",
+  "backup.automatic": "النسخ الاحتياطي التلقائي",
+  "backup.frequency": "تكرار النسخ الاحتياطي",
+  "backup.daily": "يوميًا أثناء استخدام Everia",
+  "backup.location": "موقع النسخ الاحتياطي",
+  "backup.chooseLocation": "اختيار الموقع",
+  "backup.unavailable": "غير متاح",
+  "backup.sameDriveWarning":
+    "هذا الموقع على قرص Windows ولن يحمي بياناتك إذا فُقد ذلك القرص.",
+  "backup.lastSuccess": "آخر نسخة احتياطية ناجحة",
+  "backup.never": "لم يحدث بعد",
+  "backup.nextEligible": "موعد النسخ التالي المؤهل",
+  "backup.onUseAfter": "عند استخدام Everia بعد {date}",
+  "backup.onNextUse": "عند الاستخدام التالي لـ Everia",
+  "backup.lastFailure": "آخر محاولة فاشلة",
+  "backup.retention": "يحتفظ بما يصل إلى 7 نسخ يومية · 4 أسبوعية · 6 شهرية.",
+  "backup.usesCommittedLocation":
+    "يستخدم النسخ الآن الموقع المطبّق حاليًا حتى تطبّق هذا التغيير.",
+  "backup.creating": "جارٍ إنشاء النسخة الاحتياطية…",
+  "backup.backUpNow": "نسخ احتياطي الآن",
+  "backup.restore": "استعادة نسخة احتياطية",
+  "backup.confirmRestore":
+    "هل تريد استبدال المكتبة والإعدادات والصور بمحتويات النسخة التي تم التحقق منها؟ لن تُستعاد بيانات اعتماد المصادر.",
+  "backup.credentialsExcluded":
+    "لا تتضمن النسخ المحمولة بيانات اعتماد المصادر أو موضع النافذة.",
   "errors.localeSave": "تعذّر حفظ اللغة. حاول مجددًا.",
   "settings.personalize": "تخصيص",
   "settings.intro": "اجعل Everia عالمًا يناسبك.",

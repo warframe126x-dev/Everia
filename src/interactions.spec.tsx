@@ -243,11 +243,9 @@ test("normalized online result opens a preview then the existing manual review f
   expect(screen.getByText(/metadata loaded/i)).toBeDefined();
 });
 
-test("Online Sources saves secrets through IPC and clears the password field", async () => {
-  const saveCredentials = vi.fn().mockResolvedValue({
-    ok: true,
-    data: { id: "tmdb", state: "connected" },
-  });
+test("Online Sources stages secrets and commits them only on Apply", async () => {
+  const applyDraftCredentials = vi.fn().mockResolvedValue({ ok: true });
+  const saveCredentials = vi.fn();
   vi.stubGlobal("everiaProviders", {
     configuration: vi.fn().mockResolvedValue({
       ok: true,
@@ -287,6 +285,10 @@ test("Online Sources saves secrets through IPC and clears the password field", a
       ],
     }),
     saveCredentials,
+    applyDraftCredentials,
+    testDraftCredentials: vi
+      .fn()
+      .mockResolvedValue({ ok: true, code: "success" }),
     testConnection: vi.fn(),
     removeCredentials: vi.fn(),
   });
@@ -294,13 +296,19 @@ test("Online Sources saves secrets through IPC and clears the password field", a
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   const token = await screen.findByLabelText("API Read Access Token");
   fireEvent.change(token, { target: { value: "private-token" } });
-  fireEvent.click(screen.getAllByRole("button", { name: "Save / Connect" })[1]);
+  expect(saveCredentials).not.toHaveBeenCalled();
+  expect(applyDraftCredentials).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
   await waitFor(() =>
-    expect(saveCredentials).toHaveBeenCalledWith({
-      provider: "tmdb",
-      credentials: { token: "private-token" },
-    }),
+    expect(applyDraftCredentials).toHaveBeenCalledWith([
+      {
+        provider: "tmdb",
+        kind: "save",
+        credentials: { token: "private-token" },
+      },
+    ]),
   );
+  expect(saveCredentials).not.toHaveBeenCalled();
   expect((token as HTMLInputElement).value).toBe("");
   expect(screen.getByAltText("The Movie Database (TMDB)")).toBeDefined();
 });
@@ -493,8 +501,16 @@ test("returning from details preserves library query, filter, sort and view", as
   await waitFor(() => expect(scrollMock).toHaveBeenCalled());
 });
 
-test("custom wallpaper is copied into local storage", async () => {
+test("custom wallpaper is staged until Apply and then copied into local storage", async () => {
   vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ close() {} }));
+  const NativeURL = URL;
+  vi.stubGlobal(
+    "URL",
+    class extends NativeURL {
+      static createObjectURL = vi.fn(() => "blob:test");
+      static revokeObjectURL = vi.fn();
+    },
+  );
   renderEnglish(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
   fireEvent.change(screen.getByLabelText("Choose custom wallpaper"), {
@@ -502,6 +518,15 @@ test("custom wallpaper is copied into local storage", async () => {
       files: [new File(["wallpaper bytes"], "mine.png", { type: "image/png" })],
     },
   });
+  await screen.findByText("Image selected. Apply Changes to save it.");
+  fireEvent.change(screen.getByLabelText("Image fit"), {
+    target: { value: "contain" },
+  });
+  expect(
+    screen.getByText("Image selected. Apply Changes to save it."),
+  ).toBeDefined();
+  expect(localStorage.getItem("everia.theme.v1")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
   await waitFor(() =>
     expect(
       JSON.parse(localStorage.getItem("everia.theme.v1")!).backgroundMode,
@@ -511,6 +536,35 @@ test("custom wallpaper is copied into local storage", async () => {
   expect(saved.customWallpaperId).toMatch(/^local-wallpaper:/);
   expect(await readWallpaper(saved.customWallpaperId)).toBeDefined();
   expect(localStorage.getItem("everia.theme.v1")).not.toContain("mine.png");
+});
+
+test("discarding a staged wallpaper preserves the committed image and releases preview", async () => {
+  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ close() {} }));
+  const createObjectURL = vi.fn(() => "blob:stage4-preview");
+  const revokeObjectURL = vi.fn();
+  const NativeURL = URL;
+  vi.stubGlobal(
+    "URL",
+    class extends NativeURL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    },
+  );
+  renderEnglish(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  fireEvent.change(screen.getByLabelText("Choose custom wallpaper"), {
+    target: {
+      files: [new File(["unapplied"], "pending.png", { type: "image/png" })],
+    },
+  });
+  await screen.findByText("Image selected. Apply Changes to save it.");
+  expect(createObjectURL).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Home" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discard Changes" }));
+  await waitFor(() =>
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:stage4-preview"),
+  );
+  expect(localStorage.getItem("everia.theme.v1")).toBeNull();
 });
 
 test("legacy v0.1 appearance migrates and Cancel discards entry edits", () => {
@@ -551,5 +605,5 @@ test("legacy v0.1 appearance migrates and Cancel discards entry edits", () => {
   );
   expect(
     JSON.parse(localStorage.getItem("everia.theme.v1")!).backgroundMode,
-  ).toBe("default");
+  ).toBeUndefined();
 });

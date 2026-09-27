@@ -36,6 +36,20 @@ import { useWallpaper } from "./useWallpaper";
 import { assetUrl } from "./assetPaths";
 import { categoryArtworkUrl, defaultArtworkUrl } from "./categoryAssets";
 import { useLocalization } from "./localization/Localization";
+import { applySettingsDraft } from "./settingsApply";
+import {
+  freshDraft,
+  settingsDirty,
+  type SettingsDraft,
+  type SettingsValues,
+} from "./settingsDraft";
+import {
+  BackupFailure,
+  backupMessageKey,
+  parseBackup,
+  restoreBackup,
+} from "./backup";
+import type { StringKey } from "./localization/format";
 
 type LibraryRoute = "category" | "favorites";
 type View = "home" | LibraryRoute | "details" | "settings";
@@ -65,9 +79,31 @@ const emptyDraft = (
 });
 
 function App() {
-  const { locale, t } = useLocalization();
+  const { locale, previewLocale, t } = useLocalization();
   const [items, setItems] = useState<MediaItem[]>(storage.loadItems);
   const [theme, setTheme] = useState<ThemeSettings>(storage.loadTheme);
+  const [committedLocale, setCommittedLocale] = useState(storage.loadLocale);
+  const [backupConfig, setBackupConfig] = useState<Awaited<
+    ReturnType<NonNullable<typeof window.everiaBackup>["config"]>
+  > | null>(null);
+  const [systemDrive, setSystemDrive] = useState("");
+  const [draft, setDraft] = useState<SettingsDraft>(() =>
+    freshDraft({
+      theme: storage.loadTheme(),
+      locale: storage.loadLocale(),
+      backupEnabled: null,
+      backupDestination: null,
+    }),
+  );
+  const [settingsError, setSettingsError] = useState(false);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [pendingExit, setPendingExit] = useState<
+    | { kind: "navigate"; next: View; category?: Category }
+    | { kind: "restore" }
+    | null
+  >(null);
+  const [restoreNotice, setRestoreNotice] = useState<StringKey | "">("");
+  const [stagedWallpaperUrl, setStagedWallpaperUrl] = useState<string>();
   const [sorts, setSorts] = useState<Record<string, SortKey>>(
     storage.loadSorts,
   );
@@ -96,16 +132,48 @@ function App() {
     | "errors.removeFailed"
     | "errors.changesSave"
   >(storageWarning ? "errors.savedDataUnreadable" : "");
+  const committedSettings: SettingsValues = {
+    theme,
+    locale: committedLocale,
+    backupEnabled: backupConfig?.enabled ?? null,
+    backupDestination: backupConfig?.destination ?? null,
+  };
+  const dirtySettings = settingsDirty(committedSettings, draft);
+  const visibleTheme = view === "settings" ? draft.theme : theme;
   const customWallpaper = useWallpaper(
-    theme.backgroundMode === "custom" ? theme.customWallpaperId : undefined,
+    visibleTheme.backgroundMode === "custom"
+      ? visibleTheme.customWallpaperId
+      : undefined,
   );
   useEffect(() => {
-    try {
-      storage.saveTheme(theme);
-    } catch {
-      setError("errors.themeSave");
+    if (!draft.wallpaperFile) {
+      setStagedWallpaperUrl(undefined);
+      return;
     }
-  }, [theme]);
+    const url = URL.createObjectURL(draft.wallpaperFile);
+    setStagedWallpaperUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [draft.wallpaperFile]);
+  useEffect(() => {
+    const api = window.everiaBackup;
+    if (!api) return;
+    let active = true;
+    void Promise.all([api.config(), api.systemDrive()])
+      .then(([config, drive]) => {
+        if (!active) return;
+        setBackupConfig(config);
+        setSystemDrive(drive);
+        setDraft((current) => ({
+          ...current,
+          backupEnabled: current.backupEnabled ?? config.enabled,
+          backupDestination: current.backupDestination ?? config.destination,
+        }));
+      })
+      .catch(() => setSettingsError(true));
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     try {
       storage.saveSorts(sorts);
@@ -121,10 +189,10 @@ function App() {
     }
   }, [viewModes]);
   useEffect(() => {
-    document.documentElement.style.setProperty("--accent", theme.accent);
-    document.documentElement.style.setProperty("--bg", theme.background);
-    document.documentElement.style.setProperty("--text", theme.text);
-  }, [theme]);
+    document.documentElement.style.setProperty("--accent", visibleTheme.accent);
+    document.documentElement.style.setProperty("--bg", visibleTheme.background);
+    document.documentElement.style.setProperty("--text", visibleTheme.text);
+  }, [visibleTheme]);
   useEffect(() => {
     const updateScale = ({
       progress,
@@ -154,13 +222,87 @@ function App() {
     return window.everiaWindow?.onResponsiveScale(updateScale);
   }, []);
 
-  const navigate = (next: View, category?: Category) => {
+  const discardSettings = () => {
+    setDraft(freshDraft(committedSettings));
+    previewLocale(committedLocale);
+    setSettingsError(false);
+  };
+  const applySettings = async (): Promise<boolean> => {
+    if (!dirtySettings || settingsBusy) return !dirtySettings;
+    setSettingsBusy(true);
+    setSettingsError(false);
+    try {
+      const applied = await applySettingsDraft(committedSettings, draft);
+      setTheme(applied.theme);
+      setCommittedLocale(applied.locale);
+      previewLocale(applied.locale);
+      setBackupConfig(
+        (current) =>
+          current && {
+            ...current,
+            enabled: applied.backupEnabled ?? current.enabled,
+            destination: applied.backupDestination ?? current.destination,
+          },
+      );
+      setDraft(freshDraft(applied));
+      return true;
+    } catch {
+      setSettingsError(true);
+      return false;
+    } finally {
+      setSettingsBusy(false);
+    }
+  };
+  const completeNavigation = (next: View, category?: Category) => {
+    if (next === "settings" && view !== "settings")
+      setDraft(freshDraft(committedSettings));
     if (category) setActiveCategory(category);
     setView(next);
     setQuery("");
     setStatusFilter("All");
     setSelected(null);
     setNavOpen(false);
+  };
+  const navigate = (next: View, category?: Category) => {
+    if (view === "settings" && next !== "settings" && dirtySettings) {
+      setPendingExit({ kind: "navigate", next, category });
+      return;
+    }
+    completeNavigation(next, category);
+  };
+  const performRestore = async () => {
+    try {
+      setRestoreNotice("");
+      const file = await window.everiaBackup?.selectBackup();
+      if (!file) return;
+      await parseBackup(file);
+      if (!window.confirm(t("backup.confirmRestore"))) return;
+      await restoreBackup(file);
+      window.location.reload();
+    } catch (restoreError) {
+      setRestoreNotice(
+        restoreError instanceof BackupFailure
+          ? backupMessageKey(restoreError)
+          : "backup.restoreFailed",
+      );
+    }
+  };
+  const requestRestore = () => {
+    if (dirtySettings) setPendingExit({ kind: "restore" });
+    else void performRestore();
+  };
+  const resolvePending = async (choice: "apply" | "discard" | "keep") => {
+    if (choice === "keep") {
+      setPendingExit(null);
+      return;
+    }
+    if (choice === "apply" && !(await applySettings())) return;
+    if (choice === "discard") discardSettings();
+    const action = pendingExit;
+    setPendingExit(null);
+    if (action?.kind === "navigate")
+      completeNavigation(action.next, action.category);
+    else if (action?.kind === "restore") void performRestore();
   };
 
   const openDetails = (item: MediaItem) => {
@@ -240,10 +382,11 @@ function App() {
   const activeSortKey = view === "favorites" ? "favorites" : activeCategory;
 
   const wallpaper =
-    theme.backgroundMode === "default"
+    visibleTheme.backgroundMode === "default"
       ? `url("${defaultArtworkUrl()}")`
-      : theme.backgroundMode === "custom" && customWallpaper
-        ? `url("${customWallpaper}")`
+      : visibleTheme.backgroundMode === "custom" &&
+          (stagedWallpaperUrl || customWallpaper)
+        ? `url("${stagedWallpaperUrl || customWallpaper}")`
         : "none";
 
   const interiorCategory =
@@ -260,13 +403,15 @@ function App() {
 
   return (
     <div
-      className={`${view === "home" ? "app-shell home-view" : "app-shell"}${hasInteriorArtwork ? " interior-art-view" : ""} background-${theme.backgroundMode}`}
+      className={`${view === "home" ? "app-shell home-view" : "app-shell"}${hasInteriorArtwork ? " interior-art-view" : ""} background-${visibleTheme.backgroundMode}`}
       style={
         {
           "--app-wallpaper": wallpaper,
           "--wallpaper-fit":
-            theme.imageFit === "stretch" ? "100% 100%" : theme.imageFit,
-          "--wallpaper-dim": `${theme.backgroundDimming / 100}`,
+            visibleTheme.imageFit === "stretch"
+              ? "100% 100%"
+              : visibleTheme.imageFit,
+          "--wallpaper-dim": `${visibleTheme.backgroundDimming / 100}`,
           "--interior-art": `url("${interiorArtwork}")`,
         } as React.CSSProperties
       }
@@ -428,7 +573,22 @@ function App() {
           />
         )}
         {view === "settings" && (
-          <SettingsView theme={theme} setTheme={setTheme} />
+          <SettingsView
+            draft={draft}
+            onChange={setDraft}
+            onLocaleChange={(next) => {
+              setDraft((current) => ({ ...current, locale: next }));
+              previewLocale(next);
+            }}
+            onApply={() => void applySettings()}
+            onRestore={requestRestore}
+            dirty={dirtySettings}
+            applying={settingsBusy}
+            applyError={settingsError}
+            backupConfig={backupConfig}
+            systemDrive={systemDrive}
+            restoreError={restoreNotice}
+          />
         )}
         {view === "details" && selected && (
           <DetailPanel
@@ -473,6 +633,42 @@ function App() {
             openDetails(savedItem);
           }}
         />
+      )}
+      {pendingExit && (
+        <div className="settings-exit-overlay">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-exit-title"
+            className="settings-exit-dialog"
+          >
+            <h2 id="settings-exit-title">{t("settings.unsavedWarning")}</h2>
+            {settingsError && <p role="alert">{t("settings.applyFailure")}</p>}
+            <div className="settings-exit-actions">
+              <button
+                className="primary"
+                disabled={settingsBusy}
+                onClick={() => void resolvePending("apply")}
+              >
+                {t("settings.applyChanges")}
+              </button>
+              <button
+                className="secondary"
+                disabled={settingsBusy}
+                onClick={() => void resolvePending("discard")}
+              >
+                {t("settings.discardChanges")}
+              </button>
+              <button
+                className="secondary"
+                disabled={settingsBusy}
+                onClick={() => void resolvePending("keep")}
+              >
+                {t("settings.keepEditing")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

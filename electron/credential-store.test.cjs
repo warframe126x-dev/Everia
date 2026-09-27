@@ -126,3 +126,39 @@ test("credential write failure does not report a successful save", () => {
   assert.throws(() => store.save("tmdb", { token: "secret" }));
   assert.equal(fs.statSync(directory).isDirectory(), true);
 });
+
+test("draft credential batch is atomic, encrypted, and leaves old secrets after failure", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "everia-credential-batch-"));
+  const filePath = path.join(directory, "credentials.json");
+  let fail = false;
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => {
+      if (fail && value === "failure") throw new Error("encryption failed");
+      return Buffer.from(`protected:${value}`);
+    },
+    decryptString: (value) => value.toString().replace(/^protected:/, ""),
+  };
+  const store = createCredentialStore({ filePath, safeStorage, platform: "win32" });
+  store.save("tmdb", { token: "original" });
+  const before = fs.readFileSync(filePath);
+  fail = true;
+  assert.throws(() => store.applyBatch([
+    { provider: "tmdb", kind: "save", credentials: { token: "replacement" } },
+    { provider: "rawg", kind: "save", credentials: { token: "failure" } },
+  ]));
+  assert.deepEqual(fs.readFileSync(filePath), before);
+  assert.deepEqual(store.get("tmdb"), { token: "original" });
+  fail = false;
+  store.applyBatch([
+    { provider: "tmdb", kind: "save", credentials: { token: "replacement" } },
+    { provider: "omdb", kind: "remove" },
+  ]);
+  assert.deepEqual(store.get("tmdb"), { token: "replacement" });
+  assert.doesNotMatch(fs.readFileSync(filePath, "utf8"), /replacement|original/);
+  assert.throws(() => store.applyBatch([
+    { provider: "tmdb", kind: "save", credentials: { token: "another" } },
+    { provider: "tmdb", kind: "remove" },
+  ]), (error) => error.code === "invalid-request");
+  assert.deepEqual(store.get("tmdb"), { token: "replacement" });
+});

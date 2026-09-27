@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("everiaProviders", {
     ipcRenderer.invoke("providers:save-credentials", input),
   testConnection: (provider) => ipcRenderer.invoke("providers:test", provider),
   testDraftCredentials: (input) => ipcRenderer.invoke("providers:test-draft", input),
+  applyDraftCredentials: (operations) => ipcRenderer.invoke("providers:apply-draft", operations),
   removeCredentials: (provider) =>
     ipcRenderer.invoke("providers:remove-credentials", provider),
 });
@@ -55,6 +56,8 @@ contextBridge.exposeInMainWorld("everiaBackup", {
   },
   chooseDestination: () => ipcRenderer.invoke("backup:choose-destination"),
   setEnabled: (enabled) => ipcRenderer.invoke("backup:set-enabled", enabled),
+  setConfig: (config) => ipcRenderer.invoke("backup:set-config", config),
+  systemDrive: () => ipcRenderer.invoke("backup:system-drive"),
   selectBackup: () => ipcRenderer.invoke("backup:select"),
   beginRestore: (snapshot) =>
     ipcRenderer.invoke("backup:begin-restore", snapshot),

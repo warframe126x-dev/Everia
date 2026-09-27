@@ -1,6 +1,6 @@
 import { Image, Library, Palette, Plug } from "lucide-react";
 import { defaultTheme } from "./data";
-import { storeWallpaper } from "./covers";
+import { validateWallpaper } from "./covers";
 import { useState } from "react";
 import { type BackgroundFit, type ThemeSettings } from "./types";
 import { OnlineSourcesSettings } from "./OnlineSourcesSettings";
@@ -8,25 +8,55 @@ import { assetUrl } from "./assetPaths";
 import { useLocalization } from "./localization/Localization";
 import { locales } from "./localization/locale";
 import { ControlSelect } from "./ControlSelect";
+import type { SettingsDraft } from "./settingsDraft";
+import { BackupSettings } from "./BackupSettings";
 
 export function SettingsView({
-  theme,
-  setTheme,
+  draft,
+  onChange,
+  onLocaleChange,
+  onApply,
+  onRestore,
+  dirty,
+  applying,
+  applyError,
+  backupConfig,
+  systemDrive,
+  restoreError,
 }: {
-  theme: ThemeSettings;
-  setTheme: (theme: ThemeSettings) => void;
+  draft: SettingsDraft;
+  onChange: (next: SettingsDraft) => void;
+  onLocaleChange: (locale: (typeof locales)[number]) => void;
+  onApply: () => void;
+  onRestore: () => void;
+  dirty: boolean;
+  applying: boolean;
+  applyError: boolean;
+  backupConfig: {
+    destination: string;
+    lastSuccess: string | null;
+    lastFailure: { at: string; message: string } | null;
+  } | null;
+  systemDrive: string;
+  restoreError: import("./localization/format").StringKey | "";
 }) {
-  const { locale, setLocale, t } = useLocalization();
+  const { t } = useLocalization();
+  const theme = draft.theme;
+  const setTheme = (value: ThemeSettings) =>
+    onChange({ ...draft, theme: value });
   const [error, setError] = useState(false);
-  const [localeError, setLocaleError] = useState(false);
   const [busy, setBusy] = useState(false);
   const chooseWallpaper = async (file?: File) => {
     if (!file) return;
     setBusy(true);
     setError(false);
     try {
-      const customWallpaperId = await storeWallpaper(file);
-      setTheme({ ...theme, backgroundMode: "custom", customWallpaperId });
+      await validateWallpaper(file);
+      onChange({
+        ...draft,
+        wallpaperFile: file,
+        theme: { ...theme, backgroundMode: "custom" },
+      });
     } catch {
       setError(true);
     } finally {
@@ -88,14 +118,11 @@ export function SettingsView({
             {t("settings.language")}
             <ControlSelect>
               <select
-                value={locale}
+                value={draft.locale}
                 onChange={(event) => {
-                  try {
-                    setLocale(event.target.value as typeof locale);
-                    setLocaleError(false);
-                  } catch {
-                    setLocaleError(true);
-                  }
+                  onLocaleChange(
+                    event.target.value as (typeof locales)[number],
+                  );
                 }}
               >
                 {locales.map((value) => (
@@ -110,7 +137,6 @@ export function SettingsView({
               </select>
             </ControlSelect>
           </label>
-          {localeError && <p role="alert">{t("errors.localeSave")}</p>}
         </div>
       </section>
       <section className="settings-card">
@@ -133,7 +159,11 @@ export function SettingsView({
                 key={mode}
                 className={theme.backgroundMode === mode ? "active" : ""}
                 onClick={() => setTheme({ ...theme, backgroundMode: mode })}
-                disabled={mode === "custom" && !theme.customWallpaperId}
+                disabled={
+                  mode === "custom" &&
+                  !theme.customWallpaperId &&
+                  !draft.wallpaperFile
+                }
               >
                 <strong>{t(label)}</strong>
                 <span>{t(help)}</span>
@@ -152,9 +182,11 @@ export function SettingsView({
             <small>
               {busy
                 ? t("settings.copying")
-                : theme.customWallpaperId
-                  ? t("settings.localCopyReady")
-                  : t("settings.imageLimits")}
+                : draft.wallpaperFile
+                  ? t("settings.wallpaperPending")
+                  : theme.customWallpaperId
+                    ? t("settings.localCopyReady")
+                    : t("settings.imageLimits")}
             </small>
           </label>
           <div className="background-controls">
@@ -196,7 +228,9 @@ export function SettingsView({
           </div>
           <button
             className="secondary restore-appearance"
-            onClick={() => setTheme(defaultTheme)}
+            onClick={() =>
+              onChange({ ...draft, theme: defaultTheme, wallpaperFile: null })
+            }
           >
             {t("settings.restoreAppearance")}
           </button>
@@ -209,9 +243,28 @@ export function SettingsView({
         <div className="settings-content">
           <h2>{t("settings.onlineSources")}</h2>
           <p>{t("settings.onlineDescription")}</p>
-          <OnlineSourcesSettings />
+          <OnlineSourcesSettings
+            changes={draft.credentials}
+            onChange={(credentials) => onChange({ ...draft, credentials })}
+          />
         </div>
       </section>
+      <BackupSettings
+        draft={draft}
+        onChange={onChange}
+        committed={backupConfig}
+        systemDrive={systemDrive}
+        onRestore={onRestore}
+        restoreError={restoreError}
+      />
+      {applyError && <p role="alert">{t("settings.applyFailure")}</p>}
+      <button
+        className="primary settings-apply"
+        disabled={!dirty || applying}
+        onClick={onApply}
+      >
+        {applying ? t("settings.applying") : t("settings.applyChanges")}
+      </button>
       <section className="settings-card">
         <div className="settings-icon">
           <Library />

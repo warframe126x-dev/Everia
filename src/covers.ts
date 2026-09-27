@@ -153,6 +153,24 @@ export async function storeWallpaper(file: File): Promise<string> {
   return id;
 }
 
+export async function validateWallpaper(file: File): Promise<void> {
+  await validateImage(file, WALLPAPER_MAX_BYTES);
+}
+
+export async function removeWallpaper(id: string): Promise<void> {
+  if (!/^local-wallpaper:[A-Za-z0-9_-]+$/.test(id)) throw new Error("Invalid wallpaper ID.");
+  const db = await open();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction("wallpapers", "readwrite");
+      transaction.objectStore("wallpapers").delete(id);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
 export async function readWallpaper(id: string): Promise<Blob | undefined> {
   return getAsset("wallpapers", id);
 }

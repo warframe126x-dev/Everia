@@ -101,7 +101,10 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
     if (next.destination !== undefined && (typeof next.destination !== "string" || !path.isAbsolute(next.destination)))
       throw new Error("Choose an absolute backup folder.");
     if (next.enabled !== undefined && typeof next.enabled !== "boolean") throw new Error("Invalid backup setting.");
-    const value = { ...current, ...next, destinationSelected: next.destination !== undefined ? true : current.destinationSelected };
+    if (next.destinationSelected !== undefined && typeof next.destinationSelected !== "boolean")
+      throw new Error("Invalid backup setting.");
+    const value = { ...current, ...next, destinationSelected: next.destinationSelected ??
+      (next.destination !== undefined ? true : current.destinationSelected) };
     writeAtomic(configPath, JSON.stringify(value));
     return value;
   }

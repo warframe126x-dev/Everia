@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 function credentialError(message, code) {
   const error = new Error(message);
   error.code = code;
@@ -52,6 +53,16 @@ function createCredentialStore({
       encoding: "utf8",
       mode: 0o600,
     });
+  };
+  const writeDocumentAtomically = (document) => {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const staged = `${filePath}.${crypto.randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(staged, JSON.stringify(document), { flag: "wx", mode: 0o600 });
+      const handle = fs.openSync(staged, "r+");
+      try { fs.fsyncSync(handle); } finally { fs.closeSync(handle); }
+      fs.renameSync(staged, filePath);
+    } finally { try { fs.unlinkSync(staged); } catch {} }
   };
 
   const encrypt = (value) => {
@@ -130,6 +141,46 @@ function createCredentialStore({
       const document = readDocument();
       delete document.providers[provider];
       writeDocument(document);
+    },
+    applyBatch(operations) {
+      if (!Array.isArray(operations) || operations.length < 1 || operations.length > 4)
+        throw credentialError("Invalid credential operation.", "invalid-request");
+      const document = readDocument();
+      const seen = new Set();
+      for (const operation of operations) {
+        const provider = operation?.provider;
+        if (!["igdb", "rawg", "tmdb", "omdb"].includes(provider) || seen.has(provider) ||
+            !["save", "remove"].includes(operation?.kind))
+          throw credentialError("Invalid credential operation.", "invalid-request");
+        seen.add(provider);
+        if (operation.kind === "remove") {
+          if (Object.keys(operation).sort().join() !== "kind,provider")
+            throw credentialError("Invalid credential operation.", "invalid-request");
+          delete document.providers[provider];
+          continue;
+        }
+        assertProtected();
+        if (Object.keys(operation).sort().join() !== "credentials,kind,provider" ||
+            !operation.credentials || typeof operation.credentials !== "object" ||
+            Array.isArray(operation.credentials) ||
+            Object.keys(operation.credentials).sort().join() !==
+              (provider === "igdb" ? "clientId,clientSecret" : "token"))
+          throw credentialError("Invalid credential operation.", "invalid-request");
+        if (provider === "igdb") {
+          const { clientId, clientSecret } = operation.credentials ?? {};
+          if (typeof clientId !== "string" || typeof clientSecret !== "string" ||
+              !clientId.trim() || !clientSecret.trim() ||
+              clientId.length > 4096 || clientSecret.length > 4096)
+            throw credentialError("Required credential fields are missing.", "credential-required");
+          document.providers[provider] = { clientId: clientId.trim(), clientSecret: encrypt(clientSecret.trim()) };
+        } else {
+          const token = operation.credentials?.token;
+          if (typeof token !== "string" || !token.trim() || token.length > 4096)
+            throw credentialError("Required credential fields are missing.", "credential-required");
+          document.providers[provider] = { token: encrypt(token.trim()) };
+        }
+      }
+      writeDocumentAtomically(document);
     },
   };
 }

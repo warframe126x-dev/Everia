@@ -15,6 +15,8 @@ type Localization = {
   locale: Locale;
   direction: "ltr" | "rtl";
   setLocale: (next: Locale) => void;
+  previewLocale: (next: Locale) => void;
+  commitLocale: (next: Locale) => void;
   t: typeof translate extends (locale: Locale, ...args: infer A) => string
     ? (...args: A) => string
     : never;
@@ -45,17 +47,24 @@ export function LocalizationProvider({
     storage.saveLocale(next);
     updateLocale(next);
   }, []);
+  const previewLocale = useCallback((next: Locale) => updateLocale(next), []);
+  const commitLocale = useCallback((next: Locale) => {
+    storage.saveLocale(next);
+    updateLocale(next);
+  }, []);
   const value = useMemo<Localization>(
     () => ({
       locale,
       direction: locale === "ar" ? "rtl" : "ltr",
       setLocale,
+      previewLocale,
+      commitLocale,
       t: (key, params) => translate(locale, key, params),
       count: (key, amount, params) => formatCount(locale, key, amount, params),
       number: (amount, options) => formatNumber(locale, amount, options),
       date: (value, options) => formatDate(locale, value, options),
     }),
-    [locale, setLocale],
+    [locale, setLocale, previewLocale, commitLocale],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

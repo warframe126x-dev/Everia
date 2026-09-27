@@ -23,8 +23,20 @@ declare global {
       }>;
       isDue(): Promise<boolean>;
       write(file: string): Promise<string>;
-      chooseDestination(): Promise<{ destination: string } | null>;
+      chooseDestination(): Promise<string | null>;
       setEnabled(enabled: boolean): Promise<unknown>;
+      setConfig(config: {
+        enabled?: boolean;
+        destination?: string;
+        destinationSelected?: boolean;
+      }): Promise<{
+        destinationSelected: boolean;
+        enabled: boolean;
+        destination: string;
+        lastSuccess: string | null;
+        lastFailure: { at: string; message: string } | null;
+      }>;
+      systemDrive(): Promise<string>;
       selectBackup(): Promise<string | null>;
       beginRestore(snapshot: {
         backup: string;
@@ -86,6 +98,14 @@ declare global {
       }): Promise<
         { ok: true; code: "success" } | { ok: false; errorCode: string }
       >;
+      applyDraftCredentials(
+        operations: {
+          provider: "igdb" | "rawg" | "tmdb" | "omdb";
+          kind: "save" | "remove";
+          credentials?:
+            { clientId: string; clientSecret: string } | { token: string };
+        }[],
+      ): Promise<{ ok: true } | { ok: false; errorCode: string }>;
       removeCredentials(
         provider: "igdb" | "rawg" | "tmdb" | "omdb",
       ): Promise<ProviderResponse<ProviderConfiguration>>;
