@@ -295,11 +295,11 @@ function textOrUndefined(value) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-async function getIgdbToken() {
-  const credentials = credentialsFor("igdb");
+async function getIgdbToken(override) {
+  const credentials = override ?? credentialsFor("igdb");
   if (!credentials) throw new Error(providerStatus("igdb").reason);
   if (credentials.accessToken) return credentials.accessToken;
-  if (igdbToken && igdbToken.expiresAt > Date.now() + 60_000)
+  if (!override && igdbToken && igdbToken.expiresAt > Date.now() + 60_000)
     return igdbToken.value;
   const params = new URLSearchParams({
     client_id: credentials.clientId,
@@ -312,6 +312,7 @@ async function getIgdbToken() {
     "IGDB",
   );
   if (!data.access_token) throw new Error("IGDB authentication failed.");
+  if (override) return data.access_token;
   igdbToken = {
     value: data.access_token,
     expiresAt: Date.now() + Number(data.expires_in || 0) * 1000,
@@ -422,8 +423,8 @@ function normalizeRawg(game) {
     metadata: { developers, publishers, platforms },
   };
 }
-async function rawgRequest(pathname, params = {}) {
-  const credentials = rawgCredentials();
+async function rawgRequest(pathname, params = {}, override) {
+  const credentials = override ?? rawgCredentials();
   const query = new URLSearchParams({ key: credentials.token, ...params });
   return fetchJson(
     `https://api.rawg.io/api/${pathname}?${query}`,
@@ -445,8 +446,8 @@ async function detailsRawg(id) {
   return normalizeRawg(await rawgRequest(`games/${id}`));
 }
 
-function tmdbHeaders() {
-  const credentials = credentialsFor("tmdb");
+function tmdbHeaders(override) {
+  const credentials = override ?? credentialsFor("tmdb");
   if (!credentials) throw new Error(providerStatus("tmdb").reason);
   return {
     Accept: "application/json",
@@ -573,8 +574,8 @@ function normalizeOmdb(item, category) {
     },
   };
 }
-async function omdbRequest(params) {
-  const credentials = omdbCredentials();
+async function omdbRequest(params, override) {
+  const credentials = override ?? omdbCredentials();
   const query = new URLSearchParams({ apikey: credentials.token, ...params });
   const data = await fetchJson(
     `https://www.omdbapi.com/?${query}`,
@@ -976,6 +977,21 @@ async function testConnection(provider) {
     throw error;
   }
 }
+/** An invocation-scoped test. Never touch the saved credential or provider session. */
+async function testDraftCredentials(provider, credentials) {
+  if (provider === "igdb") await getIgdbToken(credentials);
+  else if (provider === "rawg")
+    await rawgRequest("games", { page_size: "1" }, credentials);
+  else if (provider === "tmdb")
+    await fetchJson(
+      "https://api.themoviedb.org/3/configuration",
+      { headers: tmdbHeaders(credentials) },
+      "TMDB",
+    );
+  else if (provider === "omdb")
+    await omdbRequest({ i: "tt0133093", plot: "short" }, credentials);
+  else throw new ProviderError("Unsupported provider.", "invalid-request");
+}
 async function initializeProviders() {
   const available = Object.keys(PROVIDERS).filter(
     (provider) => providerStatus(provider).available,
@@ -1023,4 +1039,5 @@ module.exports = {
   search,
   searchChain,
   testConnection,
+  testDraftCredentials,
 };

@@ -79,6 +79,13 @@ declare global {
       testConnection(
         provider: ProviderId,
       ): Promise<ProviderResponse<ProviderConfiguration>>;
+      testDraftCredentials(input: {
+        provider: "igdb" | "rawg" | "tmdb" | "omdb";
+        credentials:
+          { clientId: string; clientSecret: string } | { token: string };
+      }): Promise<
+        { ok: true; code: "success" } | { ok: false; errorCode: string }
+      >;
       removeCredentials(
         provider: "igdb" | "rawg" | "tmdb" | "omdb",
       ): Promise<ProviderResponse<ProviderConfiguration>>;

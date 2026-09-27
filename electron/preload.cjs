@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("everiaProviders", {
   saveCredentials: (input) =>
     ipcRenderer.invoke("providers:save-credentials", input),
   testConnection: (provider) => ipcRenderer.invoke("providers:test", provider),
+  testDraftCredentials: (input) => ipcRenderer.invoke("providers:test-draft", input),
   removeCredentials: (provider) =>
     ipcRenderer.invoke("providers:remove-credentials", provider),
 });

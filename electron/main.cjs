@@ -13,6 +13,7 @@ const { fileURLToPath } = require("node:url");
 const { createBackupStore } = require("./backup-store.cjs");
 const providers = require("./providers.cjs");
 const { createCredentialStore } = require("./credential-store.cjs");
+const { testDraftRequest } = require("./draft-credential-test.cjs");
 const {
   loadWindowState,
   resolveWindowState,
@@ -238,6 +239,8 @@ ipcMain.handle("backup:select", backupHandler(async (window) => {
   });
   return selected.canceled ? null : backupStore.read(selected.filePaths[0]);
 }));
+ipcMain.handle("providers:test-draft", backupHandler((_window, input) =>
+  testDraftRequest(input, providers.testDraftCredentials)));
 
 app.whenReady().then(() => {
   backupStore = createBackupStore(
