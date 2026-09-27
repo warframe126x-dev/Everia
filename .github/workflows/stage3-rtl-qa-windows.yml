@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
+      SOURCE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
+      PREVIOUS_CORRECTION_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
       TOOLBAR_CORRECTION_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
       ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
       PRELOAD_CORRECTION_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
@@ -26,7 +27,7 @@ jobs:
       V08_SHA: 3afde654fe41d10fc5ea8ea80eed0ee5ffb3de1e
       PACKAGE_DIR: release/Everia-win32-x64
       VERIFICATION_DIR: verification
-      FINAL_ZIP: Everia-v1.0-Stage3-Toolbar-QA-win-x64.zip
+      FINAL_ZIP: Everia-v1.0-Stage3-SharedControls-QA-win-x64.zip
 
     steps:
       - name: Check out the exact Stage 3 correction source
@@ -62,7 +63,8 @@ jobs:
               (git rev-parse "$env:PRELOAD_CORRECTION_SHA^1").Trim() -ne $env:STAGE3_SHA -or
               (git rev-parse "$env:ZOOM_CORRECTION_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA -or
               (git rev-parse "$env:TOOLBAR_CORRECTION_SHA^1").Trim() -ne $env:ZOOM_CORRECTION_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:TOOLBAR_CORRECTION_SHA) {
+              (git rev-parse "$env:PREVIOUS_CORRECTION_SHA^1").Trim() -ne $env:TOOLBAR_CORRECTION_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:PREVIOUS_CORRECTION_SHA) {
             throw "The correction is not descended directly from the approved Stage 3 candidate."
           }
           if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
@@ -595,6 +597,31 @@ jobs:
             const providerCards = await evaluate("document.querySelectorAll('.provider-setting').length");
             if (providerCards !== 7) throw new Error(target.name + " Settings provider layout is incomplete.");
             if (settings.horizontalOverflow) throw new Error(target.name + " Settings overflowed horizontally.");
+            const controls = await evaluate(`(() => {
+              const center = (node) => { const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
+              const selects = [...document.querySelectorAll('.control-select')].map((wrapper) => {
+                const select = wrapper.querySelector('select');
+                const arrow = wrapper.querySelector('svg');
+                return { native: select instanceof HTMLSelectElement, appearance: getComputedStyle(select).appearance,
+                  arrowDy: center(arrow).y - center(select).y, arrowSide: center(arrow).x - center(select).x,
+                  pointerEvents: getComputedStyle(arrow).pointerEvents,
+                  textAlign: getComputedStyle(select).textAlign };
+              });
+              const action = document.querySelector('.settings-content > .secondary');
+              const actionText = document.createRange(); actionText.selectNodeContents(action);
+              const actionCenter = center(action), textRect = actionText.getBoundingClientRect();
+              const file = document.querySelector('.wallpaper-picker input[type=file]');
+              return { selects, actionTextDx: textRect.x + textRect.width / 2 - actionCenter.x,
+                actionTextDy: textRect.y + textRect.height / 2 - actionCenter.y,
+                cardTextAlign: getComputedStyle(document.querySelector('.background-modes button')).textAlign,
+                fileNative: file instanceof HTMLInputElement && file.type === 'file',
+                fileButtonGap: getComputedStyle(file, '::file-selector-button').marginInlineEnd };
+            })()`);
+            if (controls.selects.length !== 2 || controls.selects.some((select) => !select.native || select.appearance !== 'none' ||
+                select.pointerEvents !== 'none' || Math.abs(select.arrowDy) > 1 || select.arrowSide < 0 || select.textAlign !== 'start') ||
+                Math.abs(controls.actionTextDx) > 1 || Math.abs(controls.actionTextDy) > 2 ||
+                controls.cardTextAlign !== 'start' || !controls.fileNative || controls.fileButtonGap !== '8px')
+              throw new Error(target.name + " Settings control alignment failed: " + JSON.stringify(controls));
             await capture(target.name + "-settings");
 
             reports.push({
@@ -606,7 +633,8 @@ jobs:
               settings,
               libraryBefore,
               libraryWithScrollbar,
-              toolbar
+              toolbar,
+              controls
             });
           }
 
@@ -736,7 +764,21 @@ jobs:
                   Math.abs(layout.toolbar.segments[0].width - layout.toolbar.segments[1].width) > 0.5 ||
                   layout.toolbar.segments.some((segment) => Math.abs(segment.dx) > 1 || Math.abs(segment.dy) > 1))
                 throw new Error(`Incorrect ${locale} Library toolbar alignment: ${JSON.stringify(layout.toolbar)}`);
-              reports.push({ locale, ...state, layout });
+              await evaluate("document.querySelector('.settings-link').click()");
+              await pause(400);
+              const controlLayout = await evaluate(`(() => {
+                const center = (node) => { const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
+                return [...document.querySelectorAll('.control-select')].map((wrapper) => {
+                  const select = wrapper.querySelector('select'), arrow = wrapper.querySelector('svg');
+                  return { native: select instanceof HTMLSelectElement, appearance: getComputedStyle(select).appearance,
+                    dy: center(arrow).y - center(select).y, dx: center(arrow).x - center(select).x,
+                    textAlign: getComputedStyle(select).textAlign };
+                });
+              })()`);
+              if (controlLayout.length !== 2 || controlLayout.some((control) => !control.native || control.appearance !== 'none' ||
+                  Math.abs(control.dy) > 1 || control.textAlign !== 'start' || (locale === 'ar' ? control.dx >= 0 : control.dx <= 0)))
+                throw new Error(`Incorrect ${locale} Settings control alignment: ${JSON.stringify(controlLayout)}`);
+              reports.push({ locale, ...state, layout, controlLayout });
               if (next) await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(next))})`);
               try { await evaluate("window.close()"); } catch { /* Window may close before CDP replies. */ }
               for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++) await pause(250);
@@ -779,7 +821,7 @@ jobs:
           }
           $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
 
-          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-Toolbar-QA-win-x64"
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-SharedControls-QA-win-x64"
           New-Item -ItemType Directory -Force -Path $delivery | Out-Null
           Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
           Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
@@ -855,8 +897,8 @@ jobs:
       - name: Upload exact launch-tested delivery
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-Toolbar-QA-win-x64
-          path: Everia-v1.0-Stage3-Toolbar-QA-win-x64.zip
+          name: Everia-v1.0-Stage3-SharedControls-QA-win-x64
+          path: Everia-v1.0-Stage3-SharedControls-QA-win-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -864,7 +906,7 @@ jobs:
       - name: Upload launch evidence
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-Toolbar-QA-verification
+          name: Everia-v1.0-Stage3-SharedControls-QA-verification
           path: verification
           if-no-files-found: error
           retention-days: 30
