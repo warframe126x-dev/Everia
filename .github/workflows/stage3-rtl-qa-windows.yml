@@ -14,7 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
+      SOURCE_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
+      ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
       PRELOAD_CORRECTION_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
       STAGE3_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
       STAGE2_SHA: b77fb0046cd3bc13ec7989b85f17be7c4c6ffba0
@@ -24,7 +25,7 @@ jobs:
       V08_SHA: 3afde654fe41d10fc5ea8ea80eed0ee5ffb3de1e
       PACKAGE_DIR: release/Everia-win32-x64
       VERIFICATION_DIR: verification
-      FINAL_ZIP: Everia-v1.0-Stage3-Correction-QA-win-x64.zip
+      FINAL_ZIP: Everia-v1.0-Stage3-Toolbar-QA-win-x64.zip
 
     steps:
       - name: Check out the exact Stage 3 correction source
@@ -58,7 +59,8 @@ jobs:
           }
           if ((git rev-parse "$env:STAGE3_SHA^1").Trim() -ne $env:STAGE2_SHA -or
               (git rev-parse "$env:PRELOAD_CORRECTION_SHA^1").Trim() -ne $env:STAGE3_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA) {
+              (git rev-parse "$env:ZOOM_CORRECTION_SHA^1").Trim() -ne $env:PRELOAD_CORRECTION_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:ZOOM_CORRECTION_SHA) {
             throw "The correction is not descended directly from the approved Stage 3 candidate."
           }
           if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
@@ -548,6 +550,30 @@ jobs:
             if (libraryState.responsiveProgress < target.minimumProgress)
               throw new Error(target.name + " responsive progress remained compact: " + libraryState.responsiveProgress);
             if (libraryState.horizontalOverflow) throw new Error(target.name + " Library overflowed horizontally.");
+            const toolbar = await evaluate(`(() => {
+              const box = (selector) => {
+                const node = document.querySelector(selector);
+                const rect = node.getBoundingClientRect();
+                return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2, width: rect.width, height: rect.height };
+              };
+              return {
+                add: box('.add-button'), addContent: box('.add-button-content'),
+                select: box('.sort-select select'), arrow: box('.sort-select svg'),
+                segments: [...document.querySelectorAll('.view-toggle button')].map((button) => {
+                  const rect = button.getBoundingClientRect();
+                  const icon = button.querySelector('svg').getBoundingClientRect();
+                  return { width: rect.width, iconOffsetX: icon.x + icon.width / 2 - (rect.x + rect.width / 2),
+                    iconOffsetY: icon.y + icon.height / 2 - (rect.y + rect.height / 2) };
+                })
+              };
+            })()`);
+            if (Math.abs(toolbar.add.centerX - toolbar.addContent.centerX) > 1 ||
+                Math.abs(toolbar.add.centerY - toolbar.addContent.centerY) > 1 ||
+                Math.abs(toolbar.select.centerY - toolbar.arrow.centerY) > 1 ||
+                toolbar.segments.length !== 2 ||
+                Math.abs(toolbar.segments[0].width - toolbar.segments[1].width) > 0.5 ||
+                toolbar.segments.some((segment) => Math.abs(segment.iconOffsetX) > 1 || Math.abs(segment.iconOffsetY) > 1))
+              throw new Error(target.name + " Library toolbar content alignment failed: " + JSON.stringify(toolbar));
 
             await evaluate("document.querySelector('.media-card').click()");
             await waitFor(".detail-page");
@@ -577,7 +603,8 @@ jobs:
               edit,
               settings,
               libraryBefore,
-              libraryWithScrollbar
+              libraryWithScrollbar,
+              toolbar
             });
           }
 
@@ -686,12 +713,27 @@ jobs:
               const layout = await evaluate(`(() => {
                 const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
                 const main = document.querySelector('main').getBoundingClientRect();
+                const center = (node) => { const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width }; };
+                const add = center(document.querySelector('.add-button'));
+                const addContent = center(document.querySelector('.add-button-content'));
+                const select = center(document.querySelector('.sort-select select'));
+                const arrow = center(document.querySelector('.sort-select svg'));
+                const segments = [...document.querySelectorAll('.view-toggle button')].map((button) => {
+                  const a = center(button), b = center(button.querySelector('svg'));
+                  return { width: a.width, dx: b.x - a.x, dy: b.y - a.y };
+                });
                 return { side: sidebar.left < innerWidth / 2 ? 'left' : 'right', mainLeft: main.left, mainRight: main.right, sidebarLeft: sidebar.left, sidebarRight: sidebar.right,
-                  horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+                  horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+                  toolbar: { addDx: addContent.x - add.x, addDy: addContent.y - add.y, arrowDy: arrow.y - select.y, segments } };
               })()`);
               if (layout.side !== (locale === "ar" ? "right" : "left") || layout.horizontalOverflow ||
                   (locale === "ar" ? Math.abs(layout.mainRight - layout.sidebarLeft) > 2 : Math.abs(layout.mainLeft - layout.sidebarRight) > 2))
                 throw new Error(`Incorrect ${locale} sidebar geometry: ${JSON.stringify(layout)}`);
+              if (Math.abs(layout.toolbar.addDx) > 1 || Math.abs(layout.toolbar.addDy) > 1 ||
+                  Math.abs(layout.toolbar.arrowDy) > 1 || layout.toolbar.segments.length !== 2 ||
+                  Math.abs(layout.toolbar.segments[0].width - layout.toolbar.segments[1].width) > 0.5 ||
+                  layout.toolbar.segments.some((segment) => Math.abs(segment.dx) > 1 || Math.abs(segment.dy) > 1))
+                throw new Error(`Incorrect ${locale} Library toolbar alignment: ${JSON.stringify(layout.toolbar)}`);
               reports.push({ locale, ...state, layout });
               if (next) await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(next))})`);
               try { await evaluate("window.close()"); } catch { /* Window may close before CDP replies. */ }
@@ -735,7 +777,7 @@ jobs:
           }
           $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
 
-          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-Correction-QA-win-x64"
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage3-Toolbar-QA-win-x64"
           New-Item -ItemType Directory -Force -Path $delivery | Out-Null
           Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
           Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
@@ -811,8 +853,8 @@ jobs:
       - name: Upload exact launch-tested delivery
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-Correction-QA-win-x64
-          path: Everia-v1.0-Stage3-Correction-QA-win-x64.zip
+          name: Everia-v1.0-Stage3-Toolbar-QA-win-x64
+          path: Everia-v1.0-Stage3-Toolbar-QA-win-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -820,7 +862,7 @@ jobs:
       - name: Upload launch evidence
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage3-Correction-QA-verification
+          name: Everia-v1.0-Stage3-Toolbar-QA-verification
           path: verification
           if-no-files-found: error
           retention-days: 30
