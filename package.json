@@ -1,6 +1,6 @@
 {
   "name": "everia",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Your Personal Universe — a private, local media catalogue.",
   "main": "electron/main.cjs",
   "type": "module",
@@ -12,7 +12,8 @@
     "test:ui": "vitest run",
     "format:check": "prettier --check src",
     "desktop": "npm run build && electron .",
-    "package:win": "npm run build && electron-packager . Everia --platform=win32 --arch=x64 --app-version=0.9.0 --icon=public/assets/branding/everia-windows-icon.ico --out=release --overwrite --asar --prune=true --ignore='^/(src|upload|release|node_modules/.cache)(/|$)' --ignore='\\.(zip|tsbuildinfo)$' --ignore='^/.*\\.(spec\\.tsx|test\\.ts|providers\\.test\\.cjs|credential-store\\.test\\.cjs|window-state\\.test\\.cjs)$'"
+    "package:win": "npm run build && electron-packager . Everia --platform=win32 --arch=x64 --app-version=1.0.0 --icon=public/assets/branding/everia-windows-icon.ico --out=release --overwrite --asar --prune=true --ignore='^/(src|upload|release|installer-output|node_modules/.cache)(/|$)' --ignore='\\.(zip|tsbuildinfo)$' --ignore='^/.*\\.(spec\\.tsx|test\\.ts|providers\\.test\\.cjs|credential-store\\.test\\.cjs|window-state\\.test\\.cjs)$'",
+    "package:installer:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "lucide-react": "1.43.0",
@@ -27,6 +28,7 @@
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
     "electron": "44.3.0",
+    "electron-builder": "26.17.0",
     "fake-indexeddb": "6.2.5",
     "jsdom": "30.0.1",
     "prettier": "3.9.6",

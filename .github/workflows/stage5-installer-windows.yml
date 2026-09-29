@@ -1,6 +1,9 @@
-name: Everia Stage 4 scale and restore exact-commit Windows portable QA
+name: Everia Stage 5 Windows installer and portable lifecycle QA
 
 on:
+  push:
+    branches:
+      - v1.0
   workflow_dispatch:
 
 permissions:
@@ -12,30 +15,17 @@ jobs:
     timeout-minutes: 55
     env:
       SOURCE_SHA: ${{ github.sha }}
-      STAGE4_SOURCE_SHA: e0885283b8a0d890726231d9f789ebc28c003460
-      STAGE4_SECOND_SHA: 1e543e9999c6184b30f25168560bdf93cca09cf1
-      STAGE4_FIRST_SHA: 8dd5ae907ec09f8b4620b1d80fb81eea1950886b
-      STAGE4_BASE_SHA: 3fae743b228e604a98884d2761320118a7c7cbbb
-      PREREQUISITE_SHA: 990e0b590ee837357b92af7f658da442005db33e
-      SPLIT_BASE_SHA: e63b7e0f4debc0fb7e9ed12168a637a8437a78a1
-      CORRECTION_BASE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
-      PREVIOUS_CORRECTION_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
-      TOOLBAR_CORRECTION_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
-      ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
-      PRELOAD_CORRECTION_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
-      STAGE3_APPROVED_SHA: 3db78210bae4dd8e254bacc341bbfb98945d30c1
-      STAGE3_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
-      STAGE2_SHA: b77fb0046cd3bc13ec7989b85f17be7c4c6ffba0
+      STAGE4_APPROVED_SHA: a906089f7fd1c3e96325de4e2a25de18589a382e
       V09_SHA: fd98cfa3f79c10cebcf757f22a52e98d0f547e93
       V06_SHA: 762d79061d1bdf2bd99324a48095b6479db8d4a2
       V07_SHA: a045e98920f3c420153d0a96d2c3cf1025ccd85d
       V08_SHA: 3afde654fe41d10fc5ea8ea80eed0ee5ffb3de1e
       PACKAGE_DIR: release/Everia-win32-x64
       VERIFICATION_DIR: verification
-      FINAL_ZIP: Everia-v1.0-Stage4-Scale-Restore-QA-win-x64.zip
+      FINAL_ZIP: Everia-v1.0-win-x64.zip
 
     steps:
-      - name: Check out the exact Stage 4 correction source
+      - name: Check out the exact Stage 5 source
         uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_SHA }}
@@ -64,13 +54,8 @@ jobs:
           if (((git ls-remote origin refs/heads/main) -split '\s+')[0] -ne $env:V09_SHA) {
             throw "main moved from the stable v0.9 baseline."
           }
-          if ((git rev-parse "$env:STAGE4_BASE_SHA^1").Trim() -ne $env:STAGE3_APPROVED_SHA -or
-              (git rev-parse "$env:PREREQUISITE_SHA^1").Trim() -ne $env:STAGE4_BASE_SHA -or
-              (git rev-parse "$env:STAGE4_FIRST_SHA^1").Trim() -ne $env:PREREQUISITE_SHA -or
-              (git rev-parse "$env:STAGE4_SECOND_SHA^1").Trim() -ne $env:STAGE4_FIRST_SHA -or
-              (git rev-parse "$env:STAGE4_SOURCE_SHA^1").Trim() -ne $env:STAGE4_SECOND_SHA -or
-              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:STAGE4_SOURCE_SHA) {
-            throw "Stage 4 source is not directly descended from the approved Stage 3 and credential prerequisite checkpoints."
+          if ((git merge-base $env:STAGE4_APPROVED_SHA $env:SOURCE_SHA).Trim() -ne $env:STAGE4_APPROVED_SHA) {
+            throw "Stage 5 source does not descend from the approved Stage 4 application commit."
           }
           if (((git ls-remote origin refs/heads/v1.0) -split '\s+')[0] -ne $env:SOURCE_SHA) {
             throw "The v1.0 source branch moved from the exact QA candidate."
@@ -81,8 +66,8 @@ jobs:
           if (git status --porcelain) { throw "The source checkout is not clean." }
           New-Item -ItemType Directory -Force -Path $env:VERIFICATION_DIR | Out-Null
           git ls-files -s | Set-Content "$env:VERIFICATION_DIR/source-tree.txt" -Encoding utf8
-          git diff --name-status $env:STAGE4_BASE_SHA $env:SOURCE_SHA |
-            Set-Content "$env:VERIFICATION_DIR/stage4-changed-files.txt" -Encoding utf8
+          git diff --name-status $env:STAGE4_APPROVED_SHA $env:SOURCE_SHA |
+            Set-Content "$env:VERIFICATION_DIR/stage5-changed-files.txt" -Encoding utf8
           $env:SOURCE_SHA | Set-Content "$env:VERIFICATION_DIR/SOURCE_COMMIT.txt" -Encoding ascii
 
       - name: Use Node.js 22 x64
@@ -119,8 +104,8 @@ jobs:
             "Everia"
             "--platform=win32"
             "--arch=x64"
-            "--app-version=0.9.0"
-            "--build-version=0.9.0"
+            "--app-version=1.0.0"
+            "--build-version=1.0.0"
             "--icon=public/assets/branding/everia-windows-icon.ico"
             "--out=release"
             "--overwrite"
@@ -169,7 +154,7 @@ jobs:
           if ($version.FileDescription -ne "Everia — Your Personal Universe") {
             throw "Incorrect FileDescription: $($version.FileDescription)"
           }
-          if (-not $version.ProductVersion.StartsWith("0.9.0")) {
+          if (-not $version.ProductVersion.StartsWith("1.0.0")) {
             throw "Incorrect ProductVersion: $($version.ProductVersion)"
           }
 
@@ -1022,6 +1007,15 @@ jobs:
             Tee-Object -FilePath "$env:VERIFICATION_DIR/cross-path-profile.txt"
           if ($LASTEXITCODE -ne 0) { throw "Cross-path profile probe failed" }
 
+      - name: Build assisted NSIS installer and test lifecycle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npx electron-builder --win nsis --x64 --publish never
+          if ($LASTEXITCODE -ne 0) { throw "electron-builder installer failed" }
+          node scripts/installer-lifecycle-probe.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Installer lifecycle failed" }
+
       - name: Prove tested package unchanged and create delivery ZIP
         shell: pwsh
         run: |
@@ -1039,15 +1033,15 @@ jobs:
           }
           $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
 
-          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage4-Scale-Restore-QA-win-x64"
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-win-x64"
           New-Item -ItemType Directory -Force -Path $delivery | Out-Null
           Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
           Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
           @(
-            "Everia v1.0 Stage 4 Scale and Restore portable QA — not a release or installer"
+            "Everia v1.0 Stage 5 portable QA — not a final release"
             "Built from exact source commit: $env:SOURCE_SHA"
             "Add item's real-PC visual alignment remains unresolved; the Stage 3 control geometry remains locked."
-            "The executable retains the existing 0.9.0 metadata because this QA stage does not bump the application version."
+            "The executable carries 1.0.0 metadata; this remains an unsigned QA candidate."
             "Everia-win32-x64/Everia.exe is the exact executable that passed the launch, Home-screen, responsive-view, and scrollbar-geometry tests."
           ) | Set-Content (Join-Path $delivery "README-FIRST.txt") -Encoding utf8
 
@@ -1113,11 +1107,20 @@ jobs:
           } | ConvertTo-Json | Set-Content "$env:VERIFICATION_DIR/final-zip-verification.json" -Encoding utf8
           Get-Content "$env:VERIFICATION_DIR/final-zip-verification.json"
 
+      - name: Upload unsigned NSIS installer QA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Everia-v1.0-Setup-win-x64
+          path: installer-output/Everia-v1.0-Setup-win-x64.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
       - name: Upload exact launch-tested delivery
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage4-Scale-Restore-QA-win-x64
-          path: Everia-v1.0-Stage4-Scale-Restore-QA-win-x64.zip
+          name: Everia-v1.0-win-x64
+          path: Everia-v1.0-win-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -1125,7 +1128,7 @@ jobs:
       - name: Upload launch evidence
         uses: actions/upload-artifact@v7
         with:
-          name: Everia-v1.0-Stage4-Scale-Restore-QA-verification
+          name: Everia-v1.0-Stage5-verification
           path: verification
           if-no-files-found: error
           retention-days: 30

@@ -1,0 +1,26 @@
+{
+  "appId": "com.everia.app",
+  "productName": "Everia",
+  "directories": {
+    "output": "installer-output"
+  },
+  "files": ["dist/**/*", "electron/**/*", "public/assets/**/*", "package.json"],
+  "asar": true,
+  "win": {
+    "target": ["nsis"],
+    "icon": "public/assets/branding/everia-windows-icon.ico",
+    "executableName": "Everia"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "selectPerMachineByDefault": false,
+    "allowToChangeInstallationDirectory": true,
+    "createStartMenuShortcut": true,
+    "createDesktopShortcut": true,
+    "deleteAppDataOnUninstall": false,
+    "packElevateHelper": false,
+    "runAfterFinish": false,
+    "artifactName": "Everia-v1.0-Setup-win-x64.exe"
+  }
+}

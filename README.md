@@ -23,7 +23,7 @@ npm run package:win
 - Failed entry saves keep the edit draft available for retry; quick changes remain unsaved when storage fails.
 - Malformed provider search responses can use the established backup chain while valid empty results stay successful.
 - Corrupt credential files are preserved and reported, and cached image redirects obey the provider host policy.
-- The Windows x64 release remains portable; the installer is planned for v1.0.
+- The v1.0 Windows x64 candidate has an assisted NSIS installer and a separate portable ZIP. The installer is in Stage 5 QA, not a final release.
 
 ### Preserved v0.7 provider and responsive behavior
 
@@ -61,7 +61,7 @@ Everia keeps the original `everia.items.v1` metadata key so existing entries, ra
 
 Selected cover and wallpaper files are copied as image bytes into Everia's own local storage. Built-in artwork is packaged with the app. Runtime display does not depend on external image URLs. An optional HTTPS cover URL in the manual form is downloaded once and stored locally before the entry is saved.
 
-The portable Windows build stores its profile under `%APPDATA%\Everia` by default. Do not delete that folder if it contains the only copy of a valuable test library. Export/backup and native SQLite storage are planned for a later revision and are not part of v0.9.
+The installed and portable Windows builds share the existing per-user `%APPDATA%\Everia` profile by default. Application upgrades and uninstall do not remove it. Use Everia's logical backup feature before installation lifecycle testing; the installer does not move personal data or selected backup destinations.
 
 ## Online source configuration
 
