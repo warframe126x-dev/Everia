@@ -80,16 +80,9 @@ function assertInstall(directory) {
   const desktopTarget = shortcut(desktop);
   assert(menuTarget, `Start Menu shortcut missing at ${menu}`);
   assert(desktopTarget, `Desktop shortcut missing at ${desktop}`);
-  assert.equal(
-    path.resolve(menuTarget),
-    path.resolve(exe),
-    "Start Menu target",
-  );
-  assert.equal(
-    path.resolve(desktopTarget),
-    path.resolve(exe),
-    "Desktop target",
-  );
+  const canonical = (file) => fs.realpathSync.native(file).toLowerCase();
+  assert.equal(canonical(menuTarget), canonical(exe), "Start Menu target");
+  assert.equal(canonical(desktopTarget), canonical(exe), "Desktop target");
   return exe;
 }
 
