@@ -36,7 +36,7 @@ function powershell(script) {
 }
 function registration() {
   const rows = powershell(
-    `Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Everia 1.0.0' } | Select-Object DisplayName,DisplayVersion,InstallLocation,UninstallString | ConvertTo-Json -Compress`,
+    `Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Everia 1.0.0' } | Select-Object DisplayName,DisplayVersion,UninstallString | ConvertTo-Json -Compress`,
   );
   return rows ? JSON.parse(rows) : null;
 }
@@ -59,9 +59,13 @@ function assertInstall(directory) {
   assert(metadata.ProductVersion.startsWith("1.0.0"));
   assert.equal(registration()?.DisplayName, "Everia 1.0.0");
   assert.equal(registration()?.DisplayVersion, "1.0.0");
-  assert.equal(
-    path.resolve(registration().InstallLocation),
-    path.resolve(directory),
+  const uninstall = path.join(directory, "Uninstall Everia.exe");
+  assert(fs.existsSync(uninstall), "Installed uninstaller missing");
+  assert(
+    registration()
+      .UninstallString?.toLowerCase()
+      .includes(uninstall.toLowerCase()),
+    `Installed Apps points to the wrong uninstaller: ${registration().UninstallString}`,
   );
   const menu = path.join(
     process.env.APPDATA,
@@ -72,13 +76,17 @@ function assertInstall(directory) {
     "Everia.lnk",
   );
   const desktop = path.join(os.homedir(), "Desktop", "Everia.lnk");
+  const menuTarget = shortcut(menu);
+  const desktopTarget = shortcut(desktop);
+  assert(menuTarget, `Start Menu shortcut missing at ${menu}`);
+  assert(desktopTarget, `Desktop shortcut missing at ${desktop}`);
   assert.equal(
-    path.resolve(shortcut(menu)),
+    path.resolve(menuTarget),
     path.resolve(exe),
     "Start Menu target",
   );
   assert.equal(
-    path.resolve(shortcut(desktop)),
+    path.resolve(desktopTarget),
     path.resolve(exe),
     "Desktop target",
   );
