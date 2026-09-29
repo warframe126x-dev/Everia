@@ -36,7 +36,7 @@ function powershell(script) {
 }
 function registration() {
   const rows = powershell(
-    `Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Everia' } | Select-Object DisplayName,DisplayVersion,InstallLocation,UninstallString | ConvertTo-Json -Compress`,
+    `Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Everia 1.0.0' } | Select-Object DisplayName,DisplayVersion,InstallLocation,UninstallString | ConvertTo-Json -Compress`,
   );
   return rows ? JSON.parse(rows) : null;
 }
@@ -57,6 +57,7 @@ function assertInstall(directory) {
   );
   assert.equal(metadata.ProductName, "Everia");
   assert(metadata.ProductVersion.startsWith("1.0.0"));
+  assert.equal(registration()?.DisplayName, "Everia 1.0.0");
   assert.equal(registration()?.DisplayVersion, "1.0.0");
   assert.equal(
     path.resolve(registration().InstallLocation),
