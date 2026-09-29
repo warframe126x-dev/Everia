@@ -229,6 +229,9 @@ async function inspect(exe, seedSettings = false) {
   };
   fs.writeFileSync(backupFile, JSON.stringify(config));
   const backupHash = hash(backupFile);
+  const existingBackup = path.join(destination, "Existing-Everia.everiabackup");
+  fs.writeFileSync(existingBackup, "existing backup destination content\n");
+  const existingBackupHash = hash(existingBackup);
   await inspect(portable, true);
   const seed = await inspect(portable);
   assert.equal(seed.values["everia.locale.v1"], '"ar"');
@@ -252,6 +255,10 @@ async function inspect(exe, seedSettings = false) {
     seed,
     "Install-location change lost personal state",
   );
+  assert(
+    !fs.existsSync(path.join(first, "Everia.exe")),
+    "Changing installation directory retained the previous application copy",
+  );
   assert.equal(
     hash(credentialFile),
     credentialHash,
@@ -262,6 +269,11 @@ async function inspect(exe, seedSettings = false) {
     hash(backupFile),
     backupHash,
     "Backup configuration changed during installation",
+  );
+  assert.equal(
+    hash(existingBackup),
+    existingBackupHash,
+    "Install changed backup file",
   );
   run(path.join(second, "Uninstall Everia.exe"), ["/S", "/currentuser"]);
   // The NSIS uninstaller can hand cleanup to its temporary child process and
@@ -302,6 +314,11 @@ async function inspect(exe, seedSettings = false) {
   assert.equal(hash(credentialFile), credentialHash);
   run(require("electron"), [path.resolve("scripts/profile-verification.cjs")]);
   assert.equal(hash(backupFile), backupHash);
+  assert.equal(
+    hash(existingBackup),
+    existingBackupHash,
+    "Uninstall changed backup file",
+  );
   run(installer, ["/S", "/currentuser", `/D=${first}`]);
   assert.deepEqual(
     await inspect(assertInstall(first)),
@@ -315,6 +332,11 @@ async function inspect(exe, seedSettings = false) {
   );
   assert.equal(hash(credentialFile), credentialHash);
   assert.equal(hash(backupFile), backupHash);
+  assert.equal(
+    hash(existingBackup),
+    existingBackupHash,
+    "Reinstall changed backup file",
+  );
   const result = {
     sourceCommit: process.env.SOURCE_SHA,
     installerSha256: hash(installer),
@@ -326,6 +348,7 @@ async function inspect(exe, seedSettings = false) {
     profilePreserved: true,
     credentialsPreserved: true,
     backupConfigurationPreserved: true,
+    backupFilePreserved: true,
     startMenuShortcut: true,
     desktopShortcut: true,
   };
