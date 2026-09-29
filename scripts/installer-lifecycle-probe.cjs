@@ -145,6 +145,18 @@ async function inspect(exe, seedSettings = false) {
       await evaluate(
         `localStorage.setItem('everia.locale.v1', '"ar"'); localStorage.setItem('everia.interface-scale.v1', '1.25'); true`,
       );
+      // The fixture uses the normal close path: a forced kill immediately after
+      // localStorage.setItem can precede Chromium's durable storage flush.
+      try {
+        await evaluate("window.close()");
+      } catch {}
+      for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++)
+        await delay(100);
+      assert.notEqual(
+        child.exitCode,
+        null,
+        "Seeded portable app did not close normally",
+      );
       return;
     }
     const snapshot = await evaluate(`(async () => {
@@ -174,7 +186,7 @@ async function inspect(exe, seedSettings = false) {
     return snapshot;
   } finally {
     socket?.close();
-    child.kill();
+    if (child.exitCode === null) child.kill();
     await delay(1000);
   }
 }
