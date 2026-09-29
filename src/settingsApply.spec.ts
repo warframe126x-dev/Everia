@@ -47,21 +47,22 @@ test("draft compares semantic values and reverting edits clears dirty state", ()
 
 test("missing and malformed interface scale default to 100%; supported values persist", () => {
   expect(storage.loadInterfaceScale()).toBe(1);
-  for (const raw of ["invalid", "2", "null", '"125%"', "{}", "1.2"]) {
+  for (const raw of ["invalid", "2", "null", '"125%"', "{}", "1.2", "1.5"]) {
     localStorage.setItem("everia.interface-scale.v1", raw);
     expect(storage.loadInterfaceScale()).toBe(1);
   }
-  for (const value of [1, 1.1, 1.25, 1.5] as const) {
+  for (const value of [1, 1.1, 1.25] as const) {
     storage.saveInterfaceScale(value);
     expect(storage.loadInterfaceScale()).toBe(value);
   }
+  expect(() => storage.saveInterfaceScale(1.5 as never)).toThrow(/Unsupported/);
 });
 
 test("scale is only persisted by Apply, and failed credential Apply restores exact prior preference", async () => {
   localStorage.setItem("everia.interface-scale.v1", "1.1");
   const current = { ...committed, interfaceScale: 1.1 as const };
   const draft = freshDraft(current);
-  draft.interfaceScale = 1.5;
+  draft.interfaceScale = 1.25;
   expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
   vi.stubGlobal("everiaProviders", {
     applyDraftCredentials: vi
@@ -71,11 +72,11 @@ test("scale is only persisted by Apply, and failed credential Apply restores exa
   draft.credentials.tmdb = { kind: "save", credentials: { token: "pending" } };
   await expect(applySettingsDraft(current, draft)).rejects.toThrow();
   expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
-  expect(draft.interfaceScale).toBe(1.5);
+  expect(draft.interfaceScale).toBe(1.25);
   delete draft.credentials.tmdb;
   const applied = await applySettingsDraft(current, draft);
-  expect(applied.interfaceScale).toBe(1.5);
-  expect(storage.loadInterfaceScale()).toBe(1.5);
+  expect(applied.interfaceScale).toBe(1.25);
+  expect(storage.loadInterfaceScale()).toBe(1.25);
 });
 
 test("Apply persists changed locale, appearance, backup config, and credential batch", async () => {

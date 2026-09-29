@@ -20,6 +20,7 @@ function verify(file) {
         (manifest.schema === 2 ? data.settings.interfaceScale === undefined
           ? "locale,sorts,theme,views" : "interfaceScale,locale,sorts,theme,views" : "sorts,theme,views") ||
       (manifest.schema === 2 && !["en", "fr", "ar"].includes(data.settings.locale)) ||
+      // Existing schema 2 backups may contain 150%; the renderer normalizes it on restore.
       (data.settings.interfaceScale !== undefined && ![1, 1.1, 1.25, 1.5].includes(data.settings.interfaceScale)) ||
       assets.length > 2000 || data.items.length > 10000 ||
       manifest.recordCount !== data.items.length || manifest.assetCount !== assets.length ||

@@ -55,6 +55,7 @@ test("schema 2 accepts optional validated interface scale and older schema 2 wit
     const doc = JSON.parse(old);
     doc.data.settings.interfaceScale = scale;
     doc.manifest.payloadSha256 = digest(JSON.stringify({ data: doc.data, assets: doc.assets }));
+    // 1.5 is accepted only as an intact historical backup payload.
     assert.equal(verify(JSON.stringify(doc)).data.settings.interfaceScale, scale);
   }
   const invalid = JSON.parse(old);

@@ -1,4 +1,4 @@
-const SCALES = [1, 1.1, 1.25, 1.5];
+const SCALES = [1, 1.1, 1.25];
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 2;
 

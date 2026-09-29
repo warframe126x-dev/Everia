@@ -727,7 +727,7 @@ jobs:
             await capture(target.name + "-settings");
 
             const scaleReports = [];
-            for (const userScale of [1, 1.1, 1.25, 1.5]) {
+            for (const userScale of [1, 1.1, 1.25]) {
               await evaluate(`localStorage.setItem('everia.interface-scale.v1', ${JSON.stringify(JSON.stringify(userScale))})`);
               await command("Page.reload");
               await waitFor('.home-page');
@@ -765,15 +765,15 @@ jobs:
               const preview = await evaluate(`(() => {
                 const select = document.querySelector('select[aria-label="Interface Scale"]');
                 const before = localStorage.getItem('everia.interface-scale.v1');
-                Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, '1.25');
+                Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, '1.1');
                 select.dispatchEvent(new Event('change', { bubbles: true }));
                 return { before, after: localStorage.getItem('everia.interface-scale.v1') };
               })()`);
-              if (preview.before !== '1.5' || preview.after !== '1.5')
+              if (preview.before !== '1.25' || preview.after !== '1.25')
                 throw new Error("Scale preview persisted without Apply: " + JSON.stringify(preview));
               await evaluate("document.querySelector('.settings-apply').click()");
               await pause(500);
-              if ((await evaluate("localStorage.getItem('everia.interface-scale.v1')")) !== '1.25')
+              if ((await evaluate("localStorage.getItem('everia.interface-scale.v1')")) !== '1.1')
                 throw new Error("Apply did not persist the selected Interface Scale.");
               await command("Page.reload");
               await waitFor('.home-page');
@@ -974,7 +974,7 @@ jobs:
               if (keyboardValue === editorSelects[0].value)
                 throw new Error(`${locale} native Category select did not respond to ArrowDown`);
               const scaleMatrix = [];
-              for (const userScale of [1, 1.1, 1.25, 1.5]) {
+              for (const userScale of [1, 1.1, 1.25]) {
                 await evaluate(`localStorage.setItem('everia.interface-scale.v1', ${JSON.stringify(JSON.stringify(userScale))})`);
                 await command('Page.reload');
                 let scaled;

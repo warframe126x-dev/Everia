@@ -111,9 +111,8 @@ for (const locale of ["en", "fr", "ar"] as const) {
       "100%",
       "110%",
       "125%",
-      "150%",
     ]);
-    for (const scale of ["1.1", "1.25", "1.5", "1"]) {
+    for (const scale of ["1.1", "1.25", "1"]) {
       fireEvent.change(select, { target: { value: scale } });
       await waitFor(() =>
         expect(setInterfaceScale).toHaveBeenLastCalledWith(Number(scale)),
@@ -199,6 +198,21 @@ for (const locale of ["en", "fr", "ar"] as const) {
   });
 }
 
+test("a persisted former 150% choice starts at the supported 100% default", async () => {
+  bridge();
+  localStorage.setItem("everia.interface-scale.v1", "1.5");
+  const setInterfaceScale = vi.fn().mockResolvedValue({ ok: true });
+  vi.stubGlobal("everiaWindow", {
+    setInterfaceScale,
+    onResponsiveScale: () => () => {},
+  });
+  show("en");
+  expect(
+    (screen.getByLabelText("Interface Scale") as HTMLSelectElement).value,
+  ).toBe("1");
+  await waitFor(() => expect(setInterfaceScale).toHaveBeenCalledWith(1));
+});
+
 test("scale Apply persists; dirty navigation Discard restores the committed zoom", async () => {
   bridge();
   const setInterfaceScale = vi.fn().mockResolvedValue({ ok: true });
@@ -221,9 +235,9 @@ test("scale Apply persists; dirty navigation Discard restores the committed zoom
     expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.25"),
   );
   fireEvent.change(screen.getByLabelText("Interface Scale"), {
-    target: { value: "1.5" },
+    target: { value: "1.1" },
   });
-  await waitFor(() => expect(setInterfaceScale).toHaveBeenLastCalledWith(1.5));
+  await waitFor(() => expect(setInterfaceScale).toHaveBeenLastCalledWith(1.1));
   fireEvent.click(screen.getByRole("button", { name: "Home" }));
   fireEvent.click(
     within(screen.getByRole("dialog")).getByRole("button", {
@@ -247,7 +261,7 @@ test("restart loads only applied scale, and a failed Apply retains its preview",
     (screen.getByLabelText("Interface Scale") as HTMLSelectElement).value,
   ).toBe("1.1");
   fireEvent.change(screen.getByLabelText("Interface Scale"), {
-    target: { value: "1.5" },
+    target: { value: "1.25" },
   });
   expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
   mounted.unmount();

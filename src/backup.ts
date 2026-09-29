@@ -69,6 +69,11 @@ type Data = {
     interfaceScale?: InterfaceScale;
   };
 };
+type BackupData = Omit<Data, "settings"> & {
+  settings: Omit<Data["settings"], "interfaceScale"> & {
+    interfaceScale?: InterfaceScale | 1.5;
+  };
+};
 type Document = {
   manifest: {
     format: "EveriaBackup";
@@ -80,7 +85,7 @@ type Document = {
     payloadSha256: string;
     assets: { store: string; id: string; bytes: number; sha256: string }[];
   };
-  data: Data;
+  data: BackupData;
   assets: AssetEntry[];
 };
 type RawState = (string | null)[];
@@ -312,7 +317,10 @@ export async function parseBackup(file: string): Promise<{
   const { theme, sorts, views, locale, interfaceScale } = data.settings;
   if (manifest.schema === 2) assert(isLocale(locale), "locale");
   if (interfaceScale !== undefined)
-    assert(isInterfaceScale(interfaceScale), "interface scale");
+    assert(
+      isInterfaceScale(interfaceScale) || interfaceScale === 1.5,
+      "interface scale",
+    );
   assert(
     theme &&
       typeof theme === "object" &&
@@ -389,11 +397,22 @@ export async function parseBackup(file: string): Promise<{
     }
     restored.push({ store: asset.store, id: asset.id, blob });
   }
-  referencedAssets(data, assets);
+  // Verify the original payload first, then normalize a historical 150% backup.
+  const normalizedData: Data = {
+    ...data,
+    settings: {
+      ...data.settings,
+      interfaceScale: interfaceScale === 1.5 ? 1 : interfaceScale,
+    },
+  };
+  referencedAssets(normalizedData, assets);
   return {
-    data,
+    data: normalizedData,
     assets: restored,
-    fingerprint: manifest.payloadSha256,
+    fingerprint:
+      interfaceScale === 1.5
+        ? await hashText(JSON.stringify({ data: normalizedData, assets }))
+        : manifest.payloadSha256,
     schema: manifest.schema,
   };
 }

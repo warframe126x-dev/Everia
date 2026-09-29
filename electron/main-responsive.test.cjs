@@ -133,7 +133,7 @@ test("cold 2K maximized load reapplies actual zoom after navigation", async () =
 test("explicit interface scale composes once with current responsive target across transitions", async () => {
   const { window, profile, setScale } = await launchOnTwoK();
   try {
-    for (const [scale, expected] of [[1, 1.333], [1.1, 1.466], [1.25, 1.666], [1.5, 1.999]]) {
+    for (const [scale, expected] of [[1, 1.333], [1.1, 1.466], [1.25, 1.666]]) {
       assert.equal(setScale(scale).ok, true);
       assert.equal(window.webContents.zoom, expected);
       for (let i = 0; i < 3; i++) window.emit("resize");
@@ -142,17 +142,17 @@ test("explicit interface scale composes once with current responsive target acro
     window.contentBounds = { width: 1920, height: 1040 };
     window.bounds = { x: 0, y: 0, width: 1920, height: 1080 };
     window.emit("move");
-    assert.equal(window.webContents.zoom, 1.5);
+    assert.equal(window.webContents.zoom, 1.25);
     window.contentBounds = { width: 2560, height: 1400 };
     window.bounds = { x: 1920, y: 0, width: 2560, height: 1400 };
     window.emit("maximize");
-    assert.equal(window.webContents.zoom, 1.999);
+    assert.equal(window.webContents.zoom, 1.666);
     window.webContents.zoom = 1;
     window.webContents.emit("did-finish-load");
-    assert.equal(window.webContents.zoom, 1.999);
+    assert.equal(window.webContents.zoom, 1.666);
     assert.equal(window.lastMessage.value.progress, 1);
-    assert.throws(() => setScale(3), /Invalid interface scale/);
-    assert.equal(window.webContents.zoom, 1.999);
+    assert.throws(() => setScale(1.5), /Invalid interface scale/);
+    assert.equal(window.webContents.zoom, 1.666);
   } finally {
     window.emit("closed");
     fs.rmSync(profile, { recursive: true, force: true });

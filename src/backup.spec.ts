@@ -281,9 +281,34 @@ test("new schema 2 backups restore scale; older backups preserve the current sca
   await restoreBackup(old);
   expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
   const schema1 = await schemaOne(incoming);
-  localStorage.setItem("everia.interface-scale.v1", "1.5");
+  localStorage.setItem("everia.interface-scale.v1", "1.25");
   await restoreBackup(schema1);
-  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.5");
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.25");
+});
+test("historical 150% backup validates before normalization and restores at 100%", async () => {
+  await populate();
+  const doc = JSON.parse(await createBackup("1.0.0"));
+  doc.data.settings.interfaceScale = 1.5;
+  const payload = JSON.stringify({ data: doc.data, assets: doc.assets });
+  const digest = await webcrypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload),
+  );
+  doc.manifest.payloadSha256 = Buffer.from(digest).toString("hex");
+  const legacyBackup = JSON.stringify(doc);
+  expect((await parseBackup(legacyBackup)).data.settings.interfaceScale).toBe(
+    1,
+  );
+  localStorage.setItem("everia.interface-scale.v1", "1.25");
+  await restoreBackup(legacyBackup);
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1");
+  expect(JSON.parse(localStorage.getItem("everia.items.v1")!)).toHaveLength(2);
+  expect((await exportAssets()).length).toBe(2);
+  doc.manifest.payloadSha256 = "0".repeat(64);
+  await expect(parseBackup(JSON.stringify(doc))).rejects.toMatchObject({
+    code: "integrity",
+  });
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1");
 });
 test("scale corruption and injected restore failures preserve the previous exact value", async () => {
   await populate();
