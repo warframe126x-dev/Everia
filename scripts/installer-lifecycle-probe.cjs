@@ -264,10 +264,20 @@ async function inspect(exe, seedSettings = false) {
     "Backup configuration changed during installation",
   );
   run(path.join(second, "Uninstall Everia.exe"), ["/S", "/currentuser"]);
+  // The NSIS uninstaller can hand cleanup to its temporary child process and
+  // return before that child deletes the executable and shortcuts.
+  for (
+    let attempt = 0;
+    attempt < 60 && fs.existsSync(path.join(second, "Everia.exe"));
+    attempt++
+  )
+    await delay(500);
   assert(
     !fs.existsSync(path.join(second, "Everia.exe")),
     "Uninstall retained executable",
   );
+  for (let attempt = 0; attempt < 30 && registration() !== null; attempt++)
+    await delay(500);
   assert.equal(registration(), null, "Uninstall registration remained");
   assert.equal(
     shortcut(
