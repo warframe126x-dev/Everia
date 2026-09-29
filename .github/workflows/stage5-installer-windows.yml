@@ -1027,6 +1027,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "electron-builder installer failed" }
           node scripts/installer-lifecycle-probe.cjs
           if ($LASTEXITCODE -ne 0) { throw "Installer lifecycle failed" }
+          $report = "$env:VERIFICATION_DIR/installer-lifecycle.json"
+          if (-not (Test-Path $report)) { throw "Installer lifecycle probe produced no completed evidence." }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if ($result.sourceCommit -ne $env:SOURCE_SHA -or -not $result.profilePreserved -or
+              -not $result.credentialsPreserved -or -not $result.backupConfigurationPreserved) {
+            throw "Installer lifecycle evidence is incomplete or belongs to another source."
+          }
+          Get-Content $report
 
       - name: Prove tested package unchanged and create delivery ZIP
         shell: pwsh

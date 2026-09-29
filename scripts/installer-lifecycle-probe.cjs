@@ -115,15 +115,27 @@ async function inspect(exe, seedSettings = false) {
     const evaluate = (expression) =>
       new Promise((resolve, reject) => {
         const id = Math.floor(Math.random() * 1000000000);
+        const timer = setTimeout(
+          () => finish(new Error("CDP evaluation timed out")),
+          10000,
+        );
+        const finish = (error, value) => {
+          clearTimeout(timer);
+          socket.removeEventListener("message", listener);
+          socket.removeEventListener("close", closed);
+          error ? reject(error) : resolve(value);
+        };
+        const closed = () =>
+          finish(new Error("CDP target closed during evaluation"));
         const listener = (event) => {
           const response = JSON.parse(event.data);
           if (response.id !== id) return;
-          socket.removeEventListener("message", listener);
           response.error || response.result?.exceptionDetails
-            ? reject(new Error(JSON.stringify(response)))
-            : resolve(response.result.result.value);
+            ? finish(new Error(JSON.stringify(response)))
+            : finish(null, response.result.result.value);
         };
         socket.addEventListener("message", listener);
+        socket.addEventListener("close", closed);
         socket.send(
           JSON.stringify({
             id,
@@ -148,9 +160,13 @@ async function inspect(exe, seedSettings = false) {
       );
       // The fixture uses the normal close path: a forced kill immediately after
       // localStorage.setItem can precede Chromium's durable storage flush.
-      try {
-        await evaluate("window.close()");
-      } catch {}
+      socket.send(
+        JSON.stringify({
+          id: 0,
+          method: "Runtime.evaluate",
+          params: { expression: "window.close()" },
+        }),
+      );
       for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++)
         await delay(100);
       assert.notEqual(
@@ -289,6 +305,7 @@ async function inspect(exe, seedSettings = false) {
   assert.equal(hash(credentialFile), credentialHash);
   assert.equal(hash(backupFile), backupHash);
   const result = {
+    sourceCommit: process.env.SOURCE_SHA,
     installerSha256: hash(installer),
     installerBytes: fs.statSync(installer).size,
     installedExeSha256: hash(path.join(first, "Everia.exe")),
