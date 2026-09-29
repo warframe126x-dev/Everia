@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - v1.0
+      - qa/stage5-installer-lifecycle
   workflow_dispatch:
 
 permissions:
@@ -14,7 +15,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 55
     env:
-      SOURCE_SHA: ${{ github.sha }}
+      SOURCE_SHA: 79d48c12d03ad67339d030734a1761aab3d7f71a
       STAGE4_APPROVED_SHA: a906089f7fd1c3e96325de4e2a25de18589a382e
       V09_SHA: fd98cfa3f79c10cebcf757f22a52e98d0f547e93
       V06_SHA: 762d79061d1bdf2bd99324a48095b6479db8d4a2
@@ -872,24 +873,28 @@ jobs:
               let state;
               for (let attempt = 0; attempt < 60; attempt++) {
                 state = await evaluate(`(() => {
+                  const root = document.documentElement;
+                  if (!root || document.readyState !== 'complete' || !document.URL.startsWith('file:'))
+                    return { ready: false, readyState: document.readyState, url: document.URL };
                   const sidebar = document.querySelector('.sidebar');
                   const main = document.querySelector('main');
                   return {
-                    lang: document.documentElement.lang,
-                    dir: document.documentElement.dir,
+                    ready: true,
+                    lang: root.lang,
+                    dir: root.dir,
                     home: Boolean(document.querySelector('.home-page')),
                     cards: document.querySelectorAll('.category-card').length,
                     storedLocale: localStorage.getItem('everia.locale.v1'),
                     sidebarSide: sidebar ? (sidebar.getBoundingClientRect().left < innerWidth / 2 ? 'left' : 'right') : null,
                     mainOffset: main ? Math.round(main.getBoundingClientRect().left) : null,
-                    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+                    horizontalOverflow: root.scrollWidth > root.clientWidth
                   };
                 })()`);
-                if (state.home && state.cards === 6 && state.lang === locale) break;
+                if (state.ready && state.home && state.cards === 6 && state.lang === locale) break;
                 await pause(300);
               }
               const expectedDirection = locale === "ar" ? "rtl" : "ltr";
-              if (!state.home || state.cards !== 6 || state.lang !== locale || state.dir !== expectedDirection || state.horizontalOverflow)
+              if (!state?.ready || !state.home || state.cards !== 6 || state.lang !== locale || state.dir !== expectedDirection || state.horizontalOverflow)
                 throw new Error(`Incorrect ${locale} packaged startup: ${JSON.stringify(state)}`);
               await evaluate("document.querySelector('.category-card').click()");
               await pause(500);
@@ -958,21 +963,29 @@ jobs:
               const scaleMatrix = [];
               for (const userScale of [1, 1.1, 1.25]) {
                 await evaluate(`localStorage.setItem('everia.interface-scale.v1', ${JSON.stringify(JSON.stringify(userScale))})`);
+                const previousDocumentOrigin = await evaluate("performance.timeOrigin");
                 await command('Page.reload');
                 let scaled;
                 for (let attempt = 0; attempt < 50; attempt++) {
-                  scaled = await evaluate(`(() => ({
-                    home: Boolean(document.querySelector('.home-page')),
-                    lang: document.documentElement.lang,
-                    dir: document.documentElement.dir,
-                    width: innerWidth,
-                    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-                    storedScale: localStorage.getItem('everia.interface-scale.v1')
-                  }))()`);
-                  if (scaled.home && scaled.lang === locale) break;
+                  scaled = await evaluate(`(() => {
+                    const root = document.documentElement;
+                    if (!root || document.readyState !== 'complete' || !document.URL.startsWith('file:'))
+                      return { ready: false, readyState: document.readyState, url: document.URL };
+                    return {
+                      ready: true,
+                      home: Boolean(document.querySelector('.home-page')),
+                      lang: root.lang,
+                      dir: root.dir,
+                      documentOrigin: performance.timeOrigin,
+                      width: innerWidth,
+                      horizontalOverflow: root.scrollWidth > root.clientWidth,
+                      storedScale: localStorage.getItem('everia.interface-scale.v1')
+                    };
+                  })()`);
+                  if (scaled.ready && scaled.documentOrigin !== previousDocumentOrigin && scaled.home && scaled.lang === locale) break;
                   await pause(200);
                 }
-                if (!scaled.home || scaled.lang !== locale || scaled.dir !== expectedDirection ||
+                if (!scaled?.ready || scaled.documentOrigin === previousDocumentOrigin || !scaled.home || scaled.lang !== locale || scaled.dir !== expectedDirection ||
                     scaled.horizontalOverflow || Number(scaled.storedScale) !== userScale)
                   throw new Error(`Incorrect ${locale} scale ${userScale} startup: ${JSON.stringify(scaled)}`);
                 scaleMatrix.push({ userScale, ...scaled });
