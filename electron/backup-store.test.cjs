@@ -48,6 +48,20 @@ test("backup format, integrity, truncation, duplicate and unsafe asset entries",
   doc.manifest.payloadSha256 = digest(JSON.stringify({data:doc.data,assets:doc.assets}));
   assert.throws(() => verify(JSON.stringify(doc)), /Invalid or duplicate/);
 });
+test("schema 2 accepts optional validated interface scale and older schema 2 without it", () => {
+  const old = fixture(undefined, 2);
+  assert.equal(verify(old).data.settings.interfaceScale, undefined);
+  for (const scale of [1, 1.1, 1.25, 1.5]) {
+    const doc = JSON.parse(old);
+    doc.data.settings.interfaceScale = scale;
+    doc.manifest.payloadSha256 = digest(JSON.stringify({ data: doc.data, assets: doc.assets }));
+    assert.equal(verify(JSON.stringify(doc)).data.settings.interfaceScale, scale);
+  }
+  const invalid = JSON.parse(old);
+  invalid.data.settings.interfaceScale = 2;
+  invalid.manifest.payloadSha256 = digest(JSON.stringify({ data: invalid.data, assets: invalid.assets }));
+  assert.throws(() => verify(JSON.stringify(invalid)), /manifest or integrity/);
+});
 test("atomic write validates final file, unavailable destination preserves last success", () => setup((store,root,destination) => {
   const first = store.write(fixture(undefined, 2));
   assert.equal(fs.readFileSync(first,"utf8"), fixture(JSON.parse(fs.readFileSync(first,"utf8")).manifest.createdAt, 2));
@@ -98,6 +112,9 @@ test("schema 2 journal accepts fifth raw locale and damaged journal is retained"
   const previous = fixture(undefined, 2);
   store.beginRestore({ backup: previous, raw: [null, null, null, null, '"ar"'] });
   assert.equal(store.pendingRestore().raw[4], '"ar"');
+  store.finishRestore();
+  store.beginRestore({ backup: previous, raw: [null, null, null, null, '"ar"', '1.25'] });
+  assert.equal(store.pendingRestore().raw[5], '1.25');
   store.finishRestore();
   const journal = path.join(root, "restore-journal.v1.json");
   fs.writeFileSync(journal, JSON.stringify({ backup: fixture(), raw: [null, null, null, null] }));

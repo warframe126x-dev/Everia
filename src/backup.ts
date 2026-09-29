@@ -3,6 +3,7 @@ import { storage, storageWarning } from "./storage";
 import { validateItems } from "./validation";
 import type { MediaItem, ThemeSettings, SortKey, ViewMode } from "./types";
 import { isLocale, type Locale } from "./localization/locale";
+import { isInterfaceScale, type InterfaceScale } from "./interfaceScale";
 import type { StringKey } from "./localization/format";
 
 export type BackupFailureCode =
@@ -43,6 +44,7 @@ const KEYS = [
   "everia.sort.v1",
   "everia.views.v1",
   "everia.locale.v1",
+  "everia.interface-scale.v1",
 ] as const;
 const MAX_FILE = 128 * 1024 * 1024;
 const MAX_ASSETS = 2000;
@@ -64,6 +66,7 @@ type Data = {
     sorts: Record<string, SortKey>;
     views: Record<string, ViewMode>;
     locale?: Locale;
+    interfaceScale?: InterfaceScale;
   };
 };
 type Document = {
@@ -144,6 +147,7 @@ function loadData(): Data {
       sorts: storage.loadSorts(),
       views: storage.loadViews(),
       locale: storage.loadLocale(),
+      interfaceScale: storage.loadInterfaceScale(),
     },
   };
   if (storageWarning) throw new Error(storageWarning);
@@ -299,12 +303,16 @@ export async function parseBackup(file: string): Promise<{
     data.settings &&
       Object.keys(data.settings).sort().join() ===
         (manifest.schema === 2
-          ? "locale,sorts,theme,views"
+          ? data.settings.interfaceScale === undefined
+            ? "locale,sorts,theme,views"
+            : "interfaceScale,locale,sorts,theme,views"
           : "sorts,theme,views"),
     "settings shape",
   );
-  const { theme, sorts, views, locale } = data.settings;
+  const { theme, sorts, views, locale, interfaceScale } = data.settings;
   if (manifest.schema === 2) assert(isLocale(locale), "locale");
+  if (interfaceScale !== undefined)
+    assert(isInterfaceScale(interfaceScale), "interface scale");
   assert(
     theme &&
       typeof theme === "object" &&
@@ -405,6 +413,8 @@ async function apply(data: Data, assets: StoredAsset[]) {
   localStorage.setItem(KEYS[3], JSON.stringify(data.settings.views));
   if (data.settings.locale !== undefined)
     localStorage.setItem(KEYS[4], JSON.stringify(data.settings.locale));
+  if (data.settings.interfaceScale !== undefined)
+    localStorage.setItem(KEYS[5], JSON.stringify(data.settings.interfaceScale));
 }
 export async function recoverPendingRestore(): Promise<void> {
   const api = window.everiaBackup;
@@ -418,7 +428,7 @@ export async function recoverPendingRestore(): Promise<void> {
   const current =
     pending.version === 2 &&
     Object.keys(pending).sort().join() === "backup,raw,version" &&
-    pending.raw?.length === KEYS.length;
+    (pending.raw?.length === 5 || pending.raw?.length === KEYS.length);
   assert(
     (legacy || current) &&
       typeof pending.backup === "string" &&
@@ -452,11 +462,14 @@ export async function restoreBackup(file: string): Promise<void> {
       settings: { ...readBack.data.settings },
     };
     if (incoming.schema === 1) delete dataReadBack.settings.locale;
+    if (incoming.data.settings.interfaceScale === undefined)
+      delete dataReadBack.settings.interfaceScale;
     assert(
       JSON.stringify(dataReadBack) === JSON.stringify(incoming.data) &&
         JSON.stringify(JSON.parse(readBackFile).manifest.assets) ===
           JSON.stringify(JSON.parse(file).manifest.assets) &&
         (incoming.schema === 1 ||
+          incoming.data.settings.interfaceScale === undefined ||
           readBack.fingerprint === incoming.fingerprint),
       "restored data read-back mismatch",
     );

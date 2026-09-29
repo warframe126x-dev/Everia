@@ -2,12 +2,18 @@ import { defaultTheme } from "./data";
 import { validateItems } from "./validation";
 import type { MediaItem, SortKey, ThemeSettings, ViewMode } from "./types";
 import { isLocale, type Locale } from "./localization/locale";
+import {
+  interfaceScaleOrDefault,
+  isInterfaceScale,
+  type InterfaceScale,
+} from "./interfaceScale";
 
 const ITEMS_KEY = "everia.items.v1";
 const THEME_KEY = "everia.theme.v1";
 const SORT_KEY = "everia.sort.v1";
 const VIEW_KEY = "everia.views.v1";
 const LOCALE_KEY = "everia.locale.v1";
+const SCALE_KEY = "everia.interface-scale.v1";
 
 const blocked = new Set<string>();
 export let storageWarning = "";
@@ -28,6 +34,21 @@ function write(key: string, value: unknown) {
 }
 
 export const storage = {
+  loadInterfaceScale: (): InterfaceScale => {
+    try {
+      const raw = localStorage.getItem(SCALE_KEY);
+      return interfaceScaleOrDefault(
+        raw === null ? undefined : JSON.parse(raw),
+      );
+    } catch {
+      return 1;
+    }
+  },
+  saveInterfaceScale: (scale: InterfaceScale) => {
+    if (!isInterfaceScale(scale))
+      throw new Error("Unsupported interface scale.");
+    localStorage.setItem(SCALE_KEY, JSON.stringify(scale));
+  },
   loadLocale: (): Locale => {
     // A bad preference must never block startup or mark the library as damaged.
     try {

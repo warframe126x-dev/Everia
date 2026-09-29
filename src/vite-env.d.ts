@@ -50,6 +50,9 @@ declare global {
       finishRestore(): Promise<void>;
     };
     everiaWindow?: {
+      setInterfaceScale(
+        scale: import("./interfaceScale").InterfaceScale,
+      ): Promise<{ ok: true }>;
       onResponsiveScale(
         callback: (value: {
           zoom: number;

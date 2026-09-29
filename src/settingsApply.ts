@@ -19,8 +19,10 @@ export async function applySettingsDraft(
 ): Promise<SettingsValues> {
   const oldTheme = localStorage.getItem("everia.theme.v1");
   const oldLocale = localStorage.getItem("everia.locale.v1");
+  const oldScale = localStorage.getItem("everia.interface-scale.v1");
   let createdWallpaper: string | undefined;
   let settingsWritten = false;
+  let scaleWritten = false;
   let backupWritten = false;
   let oldBackup:
     | Awaited<ReturnType<NonNullable<typeof window.everiaBackup>["config"]>>
@@ -39,6 +41,10 @@ export async function applySettingsDraft(
     storage.saveTheme(theme);
     settingsWritten = true;
     storage.saveLocale(draft.locale);
+    if (draft.interfaceScale !== committed.interfaceScale) {
+      scaleWritten = true;
+      storage.saveInterfaceScale(draft.interfaceScale);
+    }
     if (backupChanged) {
       if (
         !window.everiaBackup ||
@@ -68,6 +74,7 @@ export async function applySettingsDraft(
     return {
       theme,
       locale: draft.locale,
+      interfaceScale: draft.interfaceScale,
       backupEnabled: draft.backupEnabled,
       backupDestination: draft.backupDestination,
     };
@@ -95,6 +102,14 @@ export async function applySettingsDraft(
         recoveryErrors.push(rollbackError);
       }
     }
+    if (scaleWritten)
+      try {
+        if (oldScale === null)
+          localStorage.removeItem("everia.interface-scale.v1");
+        else localStorage.setItem("everia.interface-scale.v1", oldScale);
+      } catch (rollbackError) {
+        recoveryErrors.push(rollbackError);
+      }
     if (createdWallpaper)
       try {
         await removeWallpaper(createdWallpaper);

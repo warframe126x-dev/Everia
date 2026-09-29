@@ -142,6 +142,19 @@ async function schemaOne(file: string): Promise<string> {
   const doc = JSON.parse(file);
   doc.manifest.schema = 1;
   delete doc.data.settings.locale;
+  delete doc.data.settings.interfaceScale;
+  const digest = await webcrypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      JSON.stringify({ data: doc.data, assets: doc.assets }),
+    ),
+  );
+  doc.manifest.payloadSha256 = Buffer.from(digest).toString("hex");
+  return JSON.stringify(doc);
+}
+async function oldSchemaTwo(file: string): Promise<string> {
+  const doc = JSON.parse(file);
+  delete doc.data.settings.interfaceScale;
   const digest = await webcrypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
@@ -168,6 +181,7 @@ test("complete logical round trip preserves all fields, preferences and image by
     sorts: { games: "rating", manga: "title" },
     views: { games: "list", manga: "grid" },
     locale: "fr",
+    interfaceScale: 1,
   });
   expect(
     Array.from(new Uint8Array(await parsed.assets[0].blob.arrayBuffer())),
@@ -252,6 +266,56 @@ test("schema 1 restore leaves current locale unchanged, including exact raw repr
   assertRestoredDirection("ar");
   expect(JSON.parse(localStorage.getItem("everia.items.v1")!)).toHaveLength(2);
   expect((await exportAssets()).length).toBe(2);
+});
+test("new schema 2 backups restore scale; older backups preserve the current scale", async () => {
+  await populate();
+  localStorage.setItem("everia.interface-scale.v1", "1.25");
+  const incoming = await createBackup("1.0.0");
+  expect((await parseBackup(incoming)).data.settings.interfaceScale).toBe(1.25);
+  localStorage.setItem("everia.interface-scale.v1", "1.5");
+  await restoreBackup(incoming);
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.25");
+  const old = await oldSchemaTwo(incoming);
+  expect((await parseBackup(old)).data.settings.interfaceScale).toBeUndefined();
+  localStorage.setItem("everia.interface-scale.v1", "1.1");
+  await restoreBackup(old);
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
+  const schema1 = await schemaOne(incoming);
+  localStorage.setItem("everia.interface-scale.v1", "1.5");
+  await restoreBackup(schema1);
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.5");
+});
+test("scale corruption and injected restore failures preserve the previous exact value", async () => {
+  await populate();
+  localStorage.setItem("everia.interface-scale.v1", "1.25");
+  const incoming = await createBackup("1.0.0");
+  const malformed = JSON.parse(incoming);
+  malformed.data.settings.interfaceScale = 2;
+  const digest = await webcrypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      JSON.stringify({ data: malformed.data, assets: malformed.assets }),
+    ),
+  );
+  malformed.manifest.payloadSha256 = Buffer.from(digest).toString("hex");
+  await expect(parseBackup(JSON.stringify(malformed))).rejects.toThrow(
+    /interface scale/,
+  );
+  localStorage.setItem("everia.interface-scale.v1", "1.1");
+  const native = Storage.prototype.setItem;
+  let failed = false;
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(
+    function (key, value) {
+      if (key === "everia.interface-scale.v1" && !failed) {
+        failed = true;
+        throw Error("injected scale write failure");
+      }
+      return native.call(this, key, value);
+    },
+  );
+  await expect(restoreBackup(incoming)).rejects.toThrow(/injected scale write/);
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
+  expect(pending).toBeNull();
 });
 test("schema 2 restores locale and failed commit or interrupted restore rolls it back", async () => {
   await populate();

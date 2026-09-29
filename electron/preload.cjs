@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("everiaProviders", {
 });
 
 contextBridge.exposeInMainWorld("everiaWindow", {
+  setInterfaceScale: (scale) => ipcRenderer.invoke("window:interface-scale", scale),
   onResponsiveScale: (callback) => {
     let active = true;
     let notificationVersion = 0;

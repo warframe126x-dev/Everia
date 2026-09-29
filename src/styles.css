@@ -1734,6 +1734,10 @@ textarea {
   gap: 10px;
   margin-top: 22px;
 }
+.restore-confirm-action {
+  background: #a94c53;
+  box-shadow: 0 8px 28px rgba(169, 76, 83, 0.18);
+}
 .color-settings {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

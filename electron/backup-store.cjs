@@ -17,8 +17,10 @@ function verify(file) {
       typeof manifest.appVersion !== "string" || manifest.appVersion.length > 40 ||
       !data || !Array.isArray(data.items) || !Array.isArray(assets) ||
       !data.settings || Object.keys(data.settings).sort().join() !==
-        (manifest.schema === 2 ? "locale,sorts,theme,views" : "sorts,theme,views") ||
+        (manifest.schema === 2 ? data.settings.interfaceScale === undefined
+          ? "locale,sorts,theme,views" : "interfaceScale,locale,sorts,theme,views" : "sorts,theme,views") ||
       (manifest.schema === 2 && !["en", "fr", "ar"].includes(data.settings.locale)) ||
+      (data.settings.interfaceScale !== undefined && ![1, 1.1, 1.25, 1.5].includes(data.settings.interfaceScale)) ||
       assets.length > 2000 || data.items.length > 10000 ||
       manifest.recordCount !== data.items.length || manifest.assetCount !== assets.length ||
       !Array.isArray(manifest.assets) || manifest.assets.length !== assets.length ||
@@ -158,7 +160,7 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
   function beginRestore(pending) {
     if (fs.existsSync(journalPath)) throw new Error("An interrupted restore must be recovered first.");
     if (verify(pending?.backup).manifest.schema !== 2) throw new Error("Invalid recovery snapshot.");
-    if (!Array.isArray(pending.raw) || pending.raw.length !== 5 ||
+    if (!Array.isArray(pending.raw) || ![5, 6].includes(pending.raw.length) ||
         !pending.raw.every((v) => v === null || typeof v === "string") ||
         Buffer.byteLength(JSON.stringify(pending.raw)) > MAX_FILE) throw new Error("Invalid recovery snapshot.");
     writeAtomic(journalPath, JSON.stringify({ version: 2, backup: pending.backup, raw: pending.raw }));
@@ -168,7 +170,7 @@ function createBackupStore(userData, defaultDestination = path.join(os.homedir()
     if (!fs.existsSync(journalPath)) return null;
     const pending = JSON.parse(readBounded(journalPath));
     const legacy = pending?.version === undefined && Object.keys(pending).sort().join() === "backup,raw" && pending.raw?.length === 4;
-    const current = pending?.version === 2 && Object.keys(pending).sort().join() === "backup,raw,version" && pending.raw?.length === 5;
+    const current = pending?.version === 2 && Object.keys(pending).sort().join() === "backup,raw,version" && [5, 6].includes(pending.raw?.length);
     if ((!legacy && !current) || !Array.isArray(pending.raw) ||
         !pending.raw.every((v) => v === null || typeof v === "string") ||
         typeof pending.backup !== "string") throw new Error("Invalid recovery journal; it was preserved.");

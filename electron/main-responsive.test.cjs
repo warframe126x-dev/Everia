@@ -25,6 +25,7 @@ async function launchOnTwoK() {
     workArea: { x: 1920, y: 0, width: 2560, height: 1400 },
   };
   let window;
+  const handlers = new Map();
   class FakeWindow extends EventEmitter {
     constructor(options) {
       super();
@@ -67,6 +68,8 @@ async function launchOnTwoK() {
       this.emit("maximize");
     }
   }
+  FakeWindow.fromWebContents = (sender) =>
+    sender === window?.webContents ? window : null;
   const screen = new EventEmitter();
   screen.getAllDisplays = () => [display];
   screen.getPrimaryDisplay = () => display;
@@ -88,7 +91,7 @@ async function launchOnTwoK() {
           app,
           BrowserWindow: FakeWindow,
           screen,
-          ipcMain: { handle() {} },
+          ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
           safeStorage: {},
           shell: {},
           dialog: {},
@@ -107,7 +110,8 @@ async function launchOnTwoK() {
   });
   await Promise.resolve();
   assert.ok(window?.loading);
-  return { window, profile };
+  return { window, profile, setScale: (value) =>
+    handlers.get("window:interface-scale")({ sender: window.webContents }, value) };
 }
 
 test("cold 2K maximized load reapplies actual zoom after navigation", async () => {
@@ -120,6 +124,35 @@ test("cold 2K maximized load reapplies actual zoom after navigation", async () =
     assert.equal(window.webContents.zoom, 1.333);
     assert.equal(window.lastMessage.channel, "window:responsive-scale");
     assert.equal(window.lastMessage.value.progress, 1);
+  } finally {
+    window.emit("closed");
+    fs.rmSync(profile, { recursive: true, force: true });
+  }
+});
+
+test("explicit interface scale composes once with current responsive target across transitions", async () => {
+  const { window, profile, setScale } = await launchOnTwoK();
+  try {
+    for (const [scale, expected] of [[1, 1.333], [1.1, 1.466], [1.25, 1.666], [1.5, 1.999]]) {
+      assert.equal(setScale(scale).ok, true);
+      assert.equal(window.webContents.zoom, expected);
+      for (let i = 0; i < 3; i++) window.emit("resize");
+      assert.equal(window.webContents.zoom, expected);
+    }
+    window.contentBounds = { width: 1920, height: 1040 };
+    window.bounds = { x: 0, y: 0, width: 1920, height: 1080 };
+    window.emit("move");
+    assert.equal(window.webContents.zoom, 1.5);
+    window.contentBounds = { width: 2560, height: 1400 };
+    window.bounds = { x: 1920, y: 0, width: 2560, height: 1400 };
+    window.emit("maximize");
+    assert.equal(window.webContents.zoom, 1.999);
+    window.webContents.zoom = 1;
+    window.webContents.emit("did-finish-load");
+    assert.equal(window.webContents.zoom, 1.999);
+    assert.equal(window.lastMessage.value.progress, 1);
+    assert.throws(() => setScale(3), /Invalid interface scale/);
+    assert.equal(window.webContents.zoom, 1.999);
   } finally {
     window.emit("closed");
     fs.rmSync(profile, { recursive: true, force: true });

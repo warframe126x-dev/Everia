@@ -11,6 +11,7 @@ import {
 } from "@testing-library/react";
 import { LocalizationProvider } from "./localization/Localization";
 import { translate } from "./localization/format";
+import { createBackup } from "./backup";
 import type { Locale } from "./localization/locale";
 import App from "./App";
 
@@ -95,6 +96,34 @@ afterEach(() => {
 });
 
 for (const locale of ["en", "fr", "ar"] as const) {
+  test(`${locale} scale control previews every supported value without persisting and keeps direction`, async () => {
+    bridge();
+    const setInterfaceScale = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("everiaWindow", {
+      setInterfaceScale,
+      onResponsiveScale: () => () => {},
+    });
+    show(locale);
+    const select = screen.getByLabelText(
+      translate(locale, "settings.interfaceScale"),
+    ) as HTMLSelectElement;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "100%",
+      "110%",
+      "125%",
+      "150%",
+    ]);
+    for (const scale of ["1.1", "1.25", "1.5", "1"]) {
+      fireEvent.change(select, { target: { value: scale } });
+      await waitFor(() =>
+        expect(setInterfaceScale).toHaveBeenLastCalledWith(Number(scale)),
+      );
+      expect(localStorage.getItem("everia.interface-scale.v1")).toBeNull();
+      expect(document.documentElement.dir).toBe(
+        locale === "ar" ? "rtl" : "ltr",
+      );
+    }
+  });
   test(`${locale} Settings and Online Sources render localized labels and preserve provider names`, async () => {
     bridge();
     show(locale);
@@ -169,6 +198,192 @@ for (const locale of ["en", "fr", "ar"] as const) {
     expect(document.documentElement.dir).toBe(locale === "ar" ? "rtl" : "ltr");
   });
 }
+
+test("scale Apply persists; dirty navigation Discard restores the committed zoom", async () => {
+  bridge();
+  const setInterfaceScale = vi.fn().mockResolvedValue({ ok: true });
+  vi.stubGlobal("everiaWindow", {
+    setInterfaceScale,
+    onResponsiveScale: () => () => {},
+  });
+  show("en");
+  const scale = screen.getByLabelText("Interface Scale") as HTMLSelectElement;
+  fireEvent.change(scale, { target: { value: "1.25" } });
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Home" }));
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Keep Editing" }));
+  expect(
+    (screen.getByLabelText("Interface Scale") as HTMLSelectElement).value,
+  ).toBe("1.25");
+  fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
+  await waitFor(() =>
+    expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.25"),
+  );
+  fireEvent.change(screen.getByLabelText("Interface Scale"), {
+    target: { value: "1.5" },
+  });
+  await waitFor(() => expect(setInterfaceScale).toHaveBeenLastCalledWith(1.5));
+  fireEvent.click(screen.getByRole("button", { name: "Home" }));
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Discard Changes",
+    }),
+  );
+  await waitFor(() => expect(setInterfaceScale).toHaveBeenLastCalledWith(1.25));
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.25");
+});
+
+test("restart loads only applied scale, and a failed Apply retains its preview", async () => {
+  bridge();
+  localStorage.setItem("everia.interface-scale.v1", "1.1");
+  const setInterfaceScale = vi.fn().mockResolvedValue({ ok: true });
+  vi.stubGlobal("everiaWindow", {
+    setInterfaceScale,
+    onResponsiveScale: () => () => {},
+  });
+  const mounted = show("en");
+  expect(
+    (screen.getByLabelText("Interface Scale") as HTMLSelectElement).value,
+  ).toBe("1.1");
+  fireEvent.change(screen.getByLabelText("Interface Scale"), {
+    target: { value: "1.5" },
+  });
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
+  mounted.unmount();
+  show("en");
+  expect(
+    (screen.getByLabelText("Interface Scale") as HTMLSelectElement).value,
+  ).toBe("1.1");
+  fireEvent.change(screen.getByLabelText("Interface Scale"), {
+    target: { value: "1.25" },
+  });
+  const native = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(
+    function (key, value) {
+      if (key === "everia.interface-scale.v1") throw Error("write failed");
+      return native.call(this, key, value);
+    },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toBe(
+      translate("en", "settings.applyFailure"),
+    ),
+  );
+  expect(
+    (screen.getByLabelText("Interface Scale") as HTMLSelectElement).value,
+  ).toBe("1.25");
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
+  expect(setInterfaceScale).toHaveBeenLastCalledWith(1.25);
+});
+
+for (const locale of ["en", "fr", "ar"] as const) {
+  test(`${locale} validated Restore uses a themed dialog, cancel and Escape do not restore`, async () => {
+    bridge();
+    vi.stubGlobal("crypto", webcrypto);
+    vi.stubGlobal("__APP_VERSION__", "1.0.0");
+    const backup = await createBackup("1.0.0");
+    const beginRestore = vi.fn();
+    const selectBackup = vi.fn().mockResolvedValue(backup);
+    vi.stubGlobal("everiaBackup", {
+      config: vi.fn().mockResolvedValue({
+        enabled: true,
+        destination: "C:\\Backups",
+        lastSuccess: null,
+        lastFailure: null,
+        version: 1,
+        destinationSelected: false,
+      }),
+      systemDrive: vi.fn().mockResolvedValue("C:\\"),
+      selectBackup,
+      beginRestore,
+    });
+    const nativeConfirm = vi.spyOn(window, "confirm").mockImplementation(() => {
+      throw Error("Native dialog used");
+    });
+    show(locale);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: translate(locale, "backup.restore"),
+      }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.getAttribute("aria-labelledby")).toBe(
+      "restore-confirm-title",
+    );
+    expect(
+      within(dialog).getByText(translate(locale, "backup.confirmRestore")),
+    ).toBeDefined();
+    expect(document.documentElement.dir).toBe(locale === "ar" ? "rtl" : "ltr");
+    fireEvent.click(
+      within(dialog).getByRole("button", {
+        name: translate(locale, "backup.cancelRestore"),
+      }),
+    );
+    expect(beginRestore).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: translate(locale, "backup.restore") }),
+    );
+    fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(beginRestore).not.toHaveBeenCalled();
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    expect(selectBackup).toHaveBeenCalledTimes(2);
+  });
+}
+
+test("Restore confirmation invokes the validated recovery engine once and surfaces failure", async () => {
+  bridge();
+  vi.stubGlobal("crypto", webcrypto);
+  vi.stubGlobal("__APP_VERSION__", "1.0.0");
+  const backup = await createBackup("1.0.0");
+  let journal: { version: 2; backup: string; raw: (string | null)[] } | null =
+    null;
+  let firstFinish = true;
+  const beginRestore = vi.fn(async (snapshot) => {
+    journal = { version: 2, ...snapshot };
+  });
+  vi.stubGlobal("everiaBackup", {
+    config: vi.fn().mockResolvedValue({
+      enabled: true,
+      destination: "C:\\Backups",
+      lastSuccess: null,
+      lastFailure: null,
+      version: 1,
+      destinationSelected: false,
+    }),
+    systemDrive: vi.fn().mockResolvedValue("C:\\"),
+    selectBackup: vi.fn().mockResolvedValue(backup),
+    beginRestore,
+    pendingRestore: async () => journal,
+    finishRestore: async () => {
+      if (firstFinish) {
+        firstFinish = false;
+        throw Error("injected finish failure");
+      }
+      journal = null;
+    },
+  });
+  show("en");
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Restore Backup" }),
+  );
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Restore Backup" }),
+  );
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Restore Backup" }),
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(beginRestore).toHaveBeenCalledTimes(1);
+  expect(journal).toBeNull();
+  expect(
+    screen.getByText(translate("en", "backup.restoreFailed")),
+  ).toBeDefined();
+});
 
 test("language selector previews semantic locale values and persists only on Apply", async () => {
   bridge();

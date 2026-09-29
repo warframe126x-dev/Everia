@@ -1,5 +1,6 @@
 import type { ThemeSettings } from "./types";
 import type { Locale } from "./localization/locale";
+import type { InterfaceScale } from "./interfaceScale";
 
 export type CredentialProvider = "igdb" | "rawg" | "tmdb" | "omdb";
 export type CredentialChange =
@@ -13,6 +14,7 @@ export type CredentialChange =
 export type SettingsValues = {
   theme: ThemeSettings;
   locale: Locale;
+  interfaceScale: InterfaceScale;
   backupEnabled: boolean | null;
   backupDestination: string | null;
 };
@@ -45,6 +47,7 @@ export function settingsDirty(
   ];
   return (
     draft.locale !== values.locale ||
+    draft.interfaceScale !== values.interfaceScale ||
     draft.backupEnabled !== values.backupEnabled ||
     draft.backupDestination !== values.backupDestination ||
     keys.some((key) => draft.theme[key] !== values.theme[key]) ||

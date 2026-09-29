@@ -4,6 +4,7 @@ import { Blob as NodeBlob, File as NodeFile } from "node:buffer";
 import { exportAssets, storeWallpaper, readWallpaper } from "./covers";
 import { defaultTheme } from "./data";
 import { applySettingsDraft } from "./settingsApply";
+import { storage } from "./storage";
 import {
   freshDraft,
   settingsDirty,
@@ -13,6 +14,7 @@ import {
 const committed: SettingsValues = {
   theme: defaultTheme,
   locale: "en",
+  interfaceScale: 1,
   backupEnabled: true,
   backupDestination: "C:\\Everia Backups",
 };
@@ -29,6 +31,10 @@ test("draft compares semantic values and reverting edits clears dirty state", ()
   expect(settingsDirty(committed, draft)).toBe(true);
   draft.locale = "en";
   expect(settingsDirty(committed, draft)).toBe(false);
+  draft.interfaceScale = 1.25;
+  expect(settingsDirty(committed, draft)).toBe(true);
+  draft.interfaceScale = 1;
+  expect(settingsDirty(committed, draft)).toBe(false);
   draft.backupDestination = "D:\\Backup";
   expect(settingsDirty(committed, draft)).toBe(true);
   draft.backupDestination = committed.backupDestination;
@@ -37,6 +43,39 @@ test("draft compares semantic values and reverting edits clears dirty state", ()
   expect(settingsDirty(committed, draft)).toBe(true);
   delete draft.credentials.tmdb;
   expect(settingsDirty(committed, draft)).toBe(false);
+});
+
+test("missing and malformed interface scale default to 100%; supported values persist", () => {
+  expect(storage.loadInterfaceScale()).toBe(1);
+  for (const raw of ["invalid", "2", "null", '"125%"', "{}", "1.2"]) {
+    localStorage.setItem("everia.interface-scale.v1", raw);
+    expect(storage.loadInterfaceScale()).toBe(1);
+  }
+  for (const value of [1, 1.1, 1.25, 1.5] as const) {
+    storage.saveInterfaceScale(value);
+    expect(storage.loadInterfaceScale()).toBe(value);
+  }
+});
+
+test("scale is only persisted by Apply, and failed credential Apply restores exact prior preference", async () => {
+  localStorage.setItem("everia.interface-scale.v1", "1.1");
+  const current = { ...committed, interfaceScale: 1.1 as const };
+  const draft = freshDraft(current);
+  draft.interfaceScale = 1.5;
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
+  vi.stubGlobal("everiaProviders", {
+    applyDraftCredentials: vi
+      .fn()
+      .mockResolvedValue({ ok: false, errorCode: "credential-required" }),
+  });
+  draft.credentials.tmdb = { kind: "save", credentials: { token: "pending" } };
+  await expect(applySettingsDraft(current, draft)).rejects.toThrow();
+  expect(localStorage.getItem("everia.interface-scale.v1")).toBe("1.1");
+  expect(draft.interfaceScale).toBe(1.5);
+  delete draft.credentials.tmdb;
+  const applied = await applySettingsDraft(current, draft);
+  expect(applied.interfaceScale).toBe(1.5);
+  expect(storage.loadInterfaceScale()).toBe(1.5);
 });
 
 test("Apply persists changed locale, appearance, backup config, and credential batch", async () => {

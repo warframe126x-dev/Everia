@@ -11,6 +11,7 @@ import { ControlSelect } from "./ControlSelect";
 import type { SettingsDraft } from "./settingsDraft";
 import { BackupSettings } from "./BackupSettings";
 import type { StringKey } from "./localization/format";
+import { interfaceScales, isInterfaceScale } from "./interfaceScale";
 
 export function SettingsView({
   draft,
@@ -133,6 +134,26 @@ export function SettingsView({
                       : value === "fr"
                         ? "Français"
                         : "العربية"}
+                  </option>
+                ))}
+              </select>
+            </ControlSelect>
+          </label>
+          <label className="locale-setting">
+            {t("settings.interfaceScale")}
+            <ControlSelect>
+              <select
+                aria-label={t("settings.interfaceScale")}
+                value={draft.interfaceScale}
+                onChange={(event) => {
+                  const scale = Number(event.target.value);
+                  if (isInterfaceScale(scale))
+                    onChange({ ...draft, interfaceScale: scale });
+                }}
+              >
+                {interfaceScales.map((scale) => (
+                  <option key={scale} value={scale}>
+                    {Math.round(scale * 100)}%
                   </option>
                 ))}
               </select>

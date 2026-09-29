@@ -14,6 +14,7 @@ const { createBackupStore } = require("./backup-store.cjs");
 const providers = require("./providers.cjs");
 const { createCredentialStore } = require("./credential-store.cjs");
 const { testDraftRequest } = require("./draft-credential-test.cjs");
+const { isInterfaceScale, effectiveZoom } = require("./interface-scale.cjs");
 const {
   loadWindowState,
   resolveWindowState,
@@ -26,15 +27,16 @@ app.setName("Everia");
 app.setAppUserModelId("com.everia.app");
 
 let windowStatePath;
+const responsiveControls = new WeakMap();
 
 function responsiveStateForWindow(window) {
   const display = screen.getDisplayMatching(window.getBounds());
   const contentBounds = window.getContentBounds();
-  const zoom = responsiveZoom(contentBounds, display);
+  const automaticZoom = responsiveZoom(contentBounds, display);
   return {
-    zoom,
+    zoom: effectiveZoom(automaticZoom, responsiveControls.get(window)?.userScale ?? 1),
     progress: responsiveProgress(contentBounds, display),
-    homeProgress: Math.max(0, Math.min(1, (zoom - 1) / (1 / 3))),
+    homeProgress: Math.max(0, Math.min(1, (automaticZoom - 1) / (1 / 3))),
   };
 }
 
@@ -97,6 +99,7 @@ function createWindow() {
     if (rendererReady)
       window.webContents.send("window:responsive-scale", responsiveState);
   };
+  responsiveControls.set(window, { userScale: 1, applyResponsiveScale });
 
   for (const event of ["resize", "move", "maximize", "unmaximize"]) {
     window.on(event, () => {
@@ -120,6 +123,7 @@ function createWindow() {
   screen.on("display-metrics-changed", handleDisplayChange);
   window.on("closed", () => {
     clearTimeout(saveTimer);
+    responsiveControls.delete(window);
     screen.removeListener("display-metrics-changed", handleDisplayChange);
   });
   window.webContents.on("did-finish-load", () => {
@@ -152,6 +156,15 @@ ipcMain.handle("window:responsive-scale-current", (event) => {
   if (!window || window.isDestroyed())
     return { zoom: 1, progress: 0, homeProgress: 0 };
   return responsiveStateForWindow(window);
+});
+ipcMain.handle("window:interface-scale", (event, scale) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const control = window && responsiveControls.get(window);
+  if (!control || window.isDestroyed() || !isInterfaceScale(scale))
+    throw new Error("Invalid interface scale request.");
+  control.userScale = scale;
+  control.applyResponsiveScale();
+  return { ok: true };
 });
 
 ipcMain.handle(

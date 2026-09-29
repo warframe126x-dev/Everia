@@ -36,6 +36,7 @@ function responsiveState(name, bounds) {
 function subscription() {
   const events = new EventEmitter();
   let resolveCurrent;
+  const invoked = [];
   const current = new Promise((resolve) => {
     resolveCurrent = resolve;
   });
@@ -52,10 +53,14 @@ function subscription() {
         ipcRenderer: {
           on: events.on.bind(events),
           removeListener: events.removeListener.bind(events),
-          invoke: (channel) =>
+          invoke: (channel, value) => {
+            invoked.push([channel, value]);
+            return (
             channel === "window:responsive-scale-current"
               ? current
-              : Promise.resolve(),
+              : Promise.resolve({ ok: true })
+            );
+          },
         },
       };
     },
@@ -64,7 +69,7 @@ function subscription() {
   const stop = exposed.everiaWindow.onResponsiveScale((state) =>
     applied.push(state),
   );
-  return { events, resolveCurrent, applied, stop };
+  return { events, resolveCurrent, applied, stop, invoked, setScale: exposed.everiaWindow.setInterfaceScale };
 }
 
 async function flush() {
@@ -83,6 +88,13 @@ test("cold startup applies the requested 1080p or 2K state without a resize", as
     );
     session.stop();
   }
+});
+
+test("preload forwards a typed scale value only through the named IPC", async () => {
+  const session = subscription();
+  assert.deepEqual(await session.setScale(1.25), { ok: true });
+  assert.deepEqual(session.invoked.at(-1), ["window:interface-scale", 1.25]);
+  session.stop();
 });
 
 test("cold 2K maximize cannot be undone by its earlier windowed startup reply", async () => {

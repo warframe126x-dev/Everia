@@ -10,6 +10,15 @@ import { recoveryExplanation } from "./localization/bootstrap";
 async function start() {
   try {
     await recoverPendingRestore();
+    // Establish committed zoom before the first React frame. Main owns all zoom writes.
+    try {
+      await Promise.race([
+        window.everiaWindow?.setInterfaceScale(storage.loadInterfaceScale()),
+        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+      ]);
+    } catch {
+      // A zoom bridge failure must not block opening a recoverable library.
+    }
     const locale = storage.loadLocale();
     document.documentElement.lang = locale;
     document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";

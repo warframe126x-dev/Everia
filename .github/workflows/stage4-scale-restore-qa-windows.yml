@@ -1,0 +1,1134 @@
+name: Everia Stage 4 scale and restore exact-commit Windows portable QA
+
+on:
+  push:
+    branches:
+      - v1.0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-launch-test:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+      STAGE4_SOURCE_SHA: e0885283b8a0d890726231d9f789ebc28c003460
+      STAGE4_SECOND_SHA: 1e543e9999c6184b30f25168560bdf93cca09cf1
+      STAGE4_FIRST_SHA: 8dd5ae907ec09f8b4620b1d80fb81eea1950886b
+      STAGE4_BASE_SHA: 3fae743b228e604a98884d2761320118a7c7cbbb
+      PREREQUISITE_SHA: 990e0b590ee837357b92af7f658da442005db33e
+      SPLIT_BASE_SHA: e63b7e0f4debc0fb7e9ed12168a637a8437a78a1
+      CORRECTION_BASE_SHA: 1644293e1eee0269f90ff63c3dbbb33930bb81d6
+      PREVIOUS_CORRECTION_SHA: 4b840b1c5ed457086ad9934dfa0f68636f16eddf
+      TOOLBAR_CORRECTION_SHA: 7209caeb4c1eac66fbb618ee6a46b744c47e2762
+      ZOOM_CORRECTION_SHA: 242cbd94f72dcd15129d25e586cd6aa4cbc93576
+      PRELOAD_CORRECTION_SHA: fb4e1ff666f0c381aeb2e1ff69a7edb1defb8cd1
+      STAGE3_APPROVED_SHA: 3db78210bae4dd8e254bacc341bbfb98945d30c1
+      STAGE3_SHA: ba185434956e18be8a5e0c3d798d15b533c0c8d2
+      STAGE2_SHA: b77fb0046cd3bc13ec7989b85f17be7c4c6ffba0
+      V09_SHA: fd98cfa3f79c10cebcf757f22a52e98d0f547e93
+      V06_SHA: 762d79061d1bdf2bd99324a48095b6479db8d4a2
+      V07_SHA: a045e98920f3c420153d0a96d2c3cf1025ccd85d
+      V08_SHA: 3afde654fe41d10fc5ea8ea80eed0ee5ffb3de1e
+      PACKAGE_DIR: release/Everia-win32-x64
+      VERIFICATION_DIR: verification
+      FINAL_ZIP: Everia-v1.0-Stage4-Scale-Restore-QA-win-x64.zip
+
+    steps:
+      - name: Check out the exact Stage 4 correction source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact source and stable release lineage
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:SOURCE_SHA) {
+            throw "Expected source commit $env:SOURCE_SHA but checked out $actual"
+          }
+          if ((git rev-parse "v0.6^{commit}").Trim() -ne $env:V06_SHA) {
+            throw "The immutable v0.6 tag no longer points to the verified baseline."
+          }
+          if ((git rev-parse "v0.7^{commit}").Trim() -ne $env:V07_SHA) {
+            throw "The immutable v0.7 tag no longer points to the verified baseline."
+          }
+          if ((git rev-parse "v0.8^{commit}").Trim() -ne $env:V08_SHA) {
+            throw "The immutable v0.8 tag no longer points to the verified baseline."
+          }
+          if ((git rev-parse "v0.9^{commit}").Trim() -ne $env:V09_SHA) {
+            throw "The immutable v0.9 tag no longer points to the stable baseline."
+          }
+          if (((git ls-remote origin refs/heads/main) -split '\s+')[0] -ne $env:V09_SHA) {
+            throw "main moved from the stable v0.9 baseline."
+          }
+          if ((git rev-parse "$env:STAGE4_BASE_SHA^1").Trim() -ne $env:STAGE3_APPROVED_SHA -or
+              (git rev-parse "$env:PREREQUISITE_SHA^1").Trim() -ne $env:STAGE4_BASE_SHA -or
+              (git rev-parse "$env:STAGE4_FIRST_SHA^1").Trim() -ne $env:PREREQUISITE_SHA -or
+              (git rev-parse "$env:STAGE4_SECOND_SHA^1").Trim() -ne $env:STAGE4_FIRST_SHA -or
+              (git rev-parse "$env:STAGE4_SOURCE_SHA^1").Trim() -ne $env:STAGE4_SECOND_SHA -or
+              (git rev-parse "$env:SOURCE_SHA^1").Trim() -ne $env:STAGE4_SOURCE_SHA) {
+            throw "Stage 4 source is not directly descended from the approved Stage 3 and credential prerequisite checkpoints."
+          }
+          if (((git ls-remote origin refs/heads/v1.0) -split '\s+')[0] -ne $env:SOURCE_SHA) {
+            throw "The v1.0 source branch moved from the exact QA candidate."
+          }
+          if ((git merge-base $env:V08_SHA $env:SOURCE_SHA).Trim() -ne $env:V08_SHA) {
+            throw "The v0.9 source is not descended from the verified v0.8 baseline."
+          }
+          if (git status --porcelain) { throw "The source checkout is not clean." }
+          New-Item -ItemType Directory -Force -Path $env:VERIFICATION_DIR | Out-Null
+          git ls-files -s | Set-Content "$env:VERIFICATION_DIR/source-tree.txt" -Encoding utf8
+          git diff --name-status $env:STAGE4_BASE_SHA $env:SOURCE_SHA |
+            Set-Content "$env:VERIFICATION_DIR/stage4-changed-files.txt" -Encoding utf8
+          $env:SOURCE_SHA | Set-Content "$env:VERIFICATION_DIR/SOURCE_COMMIT.txt" -Encoding ascii
+
+      - name: Use Node.js 22 x64
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          architecture: x64
+          cache: npm
+
+      - name: Install exact locked dependencies
+        shell: pwsh
+        run: npm ci
+
+      - name: Run tests and production build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm test
+          npm run test:ui
+          npm run build
+          git diff --exit-code -- .
+          if ((git rev-parse HEAD).Trim() -ne $env:SOURCE_SHA) {
+            throw "Source commit changed during build."
+          }
+
+      - name: Package Windows x64 from the exact source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packagerArgs = @(
+            "--no-install"
+            "electron-packager"
+            "."
+            "Everia"
+            "--platform=win32"
+            "--arch=x64"
+            "--app-version=0.9.0"
+            "--build-version=0.9.0"
+            "--icon=public/assets/branding/everia-windows-icon.ico"
+            "--out=release"
+            "--overwrite"
+            "--asar"
+            "--prune=true"
+            "--ignore=^/(src|upload|release|verification|node_modules/.cache)(/|$)"
+            "--ignore=\.(zip|tsbuildinfo)$"
+            "--ignore=^/.*\.(spec\.tsx|test\.ts|providers\.test\.cjs|credential-store\.test\.cjs|window-state\.test\.cjs)$"
+            "--win32metadata.CompanyName=Everia"
+            "--win32metadata.FileDescription=Everia — Your Personal Universe"
+            "--win32metadata.ProductName=Everia"
+            "--win32metadata.InternalName=Everia"
+            "--win32metadata.OriginalFilename=Everia.exe"
+          )
+          & npx @packagerArgs
+          if ($LASTEXITCODE -ne 0) { throw "electron-packager failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path "$env:PACKAGE_DIR/Everia.exe")) {
+            throw "Packaging did not produce Everia.exe."
+          }
+
+      - name: Verify PE architecture, metadata, icon, and manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = (Resolve-Path "$env:PACKAGE_DIR/Everia.exe").Path
+          $stream = [System.IO.File]::OpenRead($exe)
+          try {
+            $reader = [System.IO.BinaryReader]::new($stream)
+            if ($reader.ReadUInt16() -ne 0x5A4D) { throw "Everia.exe has no MZ header." }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) { throw "Everia.exe has no PE header." }
+            $machine = $reader.ReadUInt16()
+          } finally {
+            $stream.Dispose()
+          }
+          if ($machine -ne 0x8664) {
+            throw ("Everia.exe is not Windows x64; PE machine is 0x{0:X4}" -f $machine)
+          }
+
+          $version = (Get-Item $exe).VersionInfo
+          if ($version.ProductName -ne "Everia") { throw "Incorrect ProductName: $($version.ProductName)" }
+          if ($version.InternalName -ne "Everia") { throw "Incorrect InternalName: $($version.InternalName)" }
+          if ($version.OriginalFilename -ne "Everia.exe") { throw "Incorrect OriginalFilename: $($version.OriginalFilename)" }
+          if ($version.FileDescription -ne "Everia — Your Personal Universe") {
+            throw "Incorrect FileDescription: $($version.FileDescription)"
+          }
+          if (-not $version.ProductVersion.StartsWith("0.9.0")) {
+            throw "Incorrect ProductVersion: $($version.ProductVersion)"
+          }
+
+          Add-Type -AssemblyName System.Drawing
+          $expectedIcon = [System.Drawing.Icon]::new(
+            (Resolve-Path "public/assets/branding/everia-windows-icon.ico").Path,
+            32,
+            32
+          )
+          $actualIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          try {
+            $expectedBitmap = $expectedIcon.ToBitmap()
+            $actualBitmap = $actualIcon.ToBitmap()
+            if ($expectedBitmap.Width -ne $actualBitmap.Width -or $expectedBitmap.Height -ne $actualBitmap.Height) {
+              throw "Executable icon dimensions do not match the Everia icon."
+            }
+            for ($y = 0; $y -lt $expectedBitmap.Height; $y++) {
+              for ($x = 0; $x -lt $expectedBitmap.Width; $x++) {
+                if ($expectedBitmap.GetPixel($x, $y).ToArgb() -ne $actualBitmap.GetPixel($x, $y).ToArgb()) {
+                  throw "Everia.exe does not contain the expected Everia icon."
+                }
+              }
+            }
+            $actualBitmap.Save(
+              (Join-Path (Resolve-Path $env:VERIFICATION_DIR).Path "everia-extracted-icon.png"),
+              [System.Drawing.Imaging.ImageFormat]::Png
+            )
+          } finally {
+            if ($expectedBitmap) { $expectedBitmap.Dispose() }
+            if ($actualBitmap) { $actualBitmap.Dispose() }
+            $expectedIcon.Dispose()
+            $actualIcon.Dispose()
+          }
+
+          [ordered]@{
+            sourceCommit = $env:SOURCE_SHA
+            baselineCommit = $env:V06_SHA
+            peMachine = ("0x{0:X4}" -f $machine)
+            architecture = "Windows x64"
+            productName = $version.ProductName
+            internalName = $version.InternalName
+            originalFilename = $version.OriginalFilename
+            fileDescription = $version.FileDescription
+            fileVersion = $version.FileVersion
+            productVersion = $version.ProductVersion
+            executableSha256 = (Get-FileHash $exe -Algorithm SHA256).Hash
+          } | ConvertTo-Json | Set-Content "$env:VERIFICATION_DIR/executable-verification.json" -Encoding utf8
+
+          $packageRoot = (Resolve-Path $env:PACKAGE_DIR).Path
+          Get-ChildItem $packageRoot -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($packageRoot, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            } | Set-Content "$env:VERIFICATION_DIR/package-manifest-before-launch.txt" -Encoding utf8
+
+      - name: Launch the packaged Everia.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = (Resolve-Path "$env:PACKAGE_DIR/Everia.exe").Path
+          $profile = Join-Path $env:RUNNER_TEMP "everia-stage4-launch-profile"
+          $process = Start-Process -FilePath $exe -ArgumentList @(
+            "--remote-debugging-port=9222",
+            "--user-data-dir=$profile"
+          ) -PassThru
+          $process.Id | Set-Content "$env:VERIFICATION_DIR/everia.pid" -Encoding ascii
+          Start-Sleep -Seconds 3
+          if ($process.HasExited) {
+            throw "Everia.exe exited before its Home screen could be inspected. Exit code: $($process.ExitCode)"
+          }
+
+      - name: Prove the Home screen rendered without overflow
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $scriptPath = Join-Path $env:RUNNER_TEMP "verify-everia-home.mjs"
+          @'
+          import fs from "node:fs";
+          import path from "node:path";
+
+          const deadline = Date.now() + 60000;
+          let page;
+          while (Date.now() < deadline) {
+            try {
+              const response = await fetch("http://127.0.0.1:9222/json/list");
+              if (response.ok) {
+                const targets = await response.json();
+                page = targets.find((target) => target.type === "page" && String(target.url).startsWith("file:"));
+                if (page?.webSocketDebuggerUrl) break;
+              }
+            } catch {}
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+          if (!page?.webSocketDebuggerUrl) throw new Error("Everia did not expose a rendered page within 60 seconds.");
+
+          const socket = new WebSocket(page.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            socket.addEventListener("open", resolve, { once: true });
+            socket.addEventListener("error", reject, { once: true });
+          });
+          let nextId = 0;
+          const pending = new Map();
+          socket.addEventListener("message", (event) => {
+            const message = JSON.parse(String(event.data));
+            const waiter = pending.get(message.id);
+            if (!waiter) return;
+            pending.delete(message.id);
+            message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);
+          });
+          const command = (method, params = {}) => new Promise((resolve, reject) => {
+            const id = ++nextId;
+            pending.set(id, { resolve, reject });
+            socket.send(JSON.stringify({ id, method, params }));
+          });
+
+          await command("Page.enable");
+          await command("Runtime.enable");
+          let state;
+          while (Date.now() < deadline) {
+            const result = await command("Runtime.evaluate", {
+              expression: `JSON.stringify((() => {
+                const root = document.documentElement;
+                const names = [...document.querySelectorAll('.category-card strong')].map((element) => element.textContent?.trim());
+                return {
+                  readyState: document.readyState,
+                  title: document.title,
+                  bodyText: document.body?.innerText || '',
+                  homeHeading: [...document.querySelectorAll('h1')].some((element) => /^EVERIA$/i.test((element.textContent || '').trim())),
+                  categoryCards: document.querySelectorAll('.category-card').length,
+                  categoryNames: names,
+                  horizontalOverflow: root.scrollWidth > root.clientWidth,
+                  verticalOverflow: root.scrollHeight > root.clientHeight
+                };
+              })())`,
+              returnByValue: true
+            });
+            state = JSON.parse(result.result.value);
+            if (state.readyState === "complete" && state.homeHeading && state.categoryCards === 6) break;
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+          const expected = ["Games", "Movies", "TV Shows", "Novels", "Manga", "Anime"];
+          if (state?.readyState !== "complete" || !state?.homeHeading || state?.categoryCards !== 6) {
+            throw new Error("Home screen did not render correctly: " + JSON.stringify(state));
+          }
+          if (expected.some((name) => !state.categoryNames.includes(name))) {
+            throw new Error("Home screen is missing a category: " + JSON.stringify(state));
+          }
+          if (state.horizontalOverflow || state.verticalOverflow) {
+            throw new Error("Home screen overflowed its content viewport: " + JSON.stringify(state));
+          }
+          if (!state.bodyText.includes("Your Personal Universe")) throw new Error("Home branding is incomplete.");
+
+          const screenshot = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+          fs.writeFileSync(path.join(process.env.VERIFICATION_DIR, "everia-home-screen.png"), Buffer.from(screenshot.data, "base64"));
+          fs.writeFileSync(
+            path.join(process.env.VERIFICATION_DIR, "home-screen-verification.json"),
+            JSON.stringify({ sourceCommit: process.env.SOURCE_SHA, launchedExecutable: "Everia.exe", rendered: true, ...state }, null, 2)
+          );
+          socket.close();
+          '@ | Set-Content $scriptPath -Encoding utf8
+          node $scriptPath
+
+      - name: Validate 1080p and 2K responsive views and scrollbar geometry
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $scriptPath = Join-Path $env:RUNNER_TEMP "verify-everia-responsive.mjs"
+          $resizeScript = Join-Path $env:RUNNER_TEMP "resize-everia-window.ps1"
+          @'
+          param(
+            [Parameter(Mandatory = $true)][int]$ProcessId,
+            [Parameter(Mandatory = $true)][int]$Width,
+            [Parameter(Mandatory = $true)][int]$Height
+          )
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class EveriaWindowSizing {
+            [DllImport("user32.dll", SetLastError = true)]
+            public static extern bool MoveWindow(
+              IntPtr hWnd,
+              int x,
+              int y,
+              int width,
+              int height,
+              bool repaint
+            );
+          }
+          "@
+          $process = Get-Process -Id $ProcessId
+          if ($process.MainWindowHandle -eq [IntPtr]::Zero) {
+            throw "Everia has no main window handle."
+          }
+          if (-not [EveriaWindowSizing]::MoveWindow(
+            $process.MainWindowHandle,
+            0,
+            0,
+            $Width,
+            $Height,
+            $true
+          )) {
+            throw "Win32 MoveWindow failed."
+          }
+          '@ | Set-Content $resizeScript -Encoding utf8
+          $env:EVERIA_RESIZE_SCRIPT = $resizeScript
+          @'
+          import fs from "node:fs";
+          import path from "node:path";
+          import { execFileSync } from "node:child_process";
+
+          const deadline = Date.now() + 60000;
+          let page;
+          while (Date.now() < deadline) {
+            try {
+              const response = await fetch("http://127.0.0.1:9222/json/list");
+              if (response.ok) {
+                const targets = await response.json();
+                page = targets.find((target) => target.type === "page" && String(target.url).startsWith("file:"));
+                if (page?.webSocketDebuggerUrl) break;
+              }
+            } catch {}
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+          if (!page?.webSocketDebuggerUrl) throw new Error("Everia did not expose a responsive-test page.");
+
+          const socket = new WebSocket(page.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            socket.addEventListener("open", resolve, { once: true });
+            socket.addEventListener("error", reject, { once: true });
+          });
+          let nextId = 0;
+          const pending = new Map();
+          socket.addEventListener("message", (event) => {
+            const message = JSON.parse(String(event.data));
+            const waiter = pending.get(message.id);
+            if (!waiter) return;
+            pending.delete(message.id);
+            message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);
+          });
+          const command = (method, params = {}) => new Promise((resolve, reject) => {
+            const id = ++nextId;
+            pending.set(id, { resolve, reject });
+            socket.send(JSON.stringify({ id, method, params }));
+          });
+          const evaluate = async (expression) => {
+            const response = await command("Runtime.evaluate", {
+              expression,
+              awaitPromise: true,
+              returnByValue: true
+            });
+            if (response.exceptionDetails) throw new Error(JSON.stringify(response.exceptionDetails));
+            return response.result.value;
+          };
+          const pause = (milliseconds = 700) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+          const waitFor = async (selector) => {
+            for (let attempt = 0; attempt < 80; attempt += 1) {
+              if (await evaluate("Boolean(document.querySelector(" + JSON.stringify(selector) + "))")) return;
+              await pause(250);
+            }
+            throw new Error("Timed out waiting for " + selector);
+          };
+          const capture = async (name) => {
+            const screenshot = await command("Page.captureScreenshot", {
+              format: "png",
+              captureBeyondViewport: false
+            });
+            fs.writeFileSync(
+              path.join(process.env.VERIFICATION_DIR, name + ".png"),
+              Buffer.from(screenshot.data, "base64")
+            );
+          };
+          const state = () => evaluate(`(() => {
+            const root = document.documentElement;
+            return {
+              innerWidth,
+              innerHeight,
+              outerWidth,
+              outerHeight,
+              responsiveProgress: Number.parseFloat(getComputedStyle(root).getPropertyValue("--responsive-progress")) || 0,
+              homeBrandFactor: Number.parseFloat(getComputedStyle(root).getPropertyValue("--home-brand-factor")) || 1,
+              homeFooterFactor: Number.parseFloat(getComputedStyle(root).getPropertyValue("--home-footer-factor")) || 1,
+              horizontalOverflow: root.scrollWidth > root.clientWidth,
+              verticalOverflow: root.scrollHeight > root.clientHeight
+            };
+          })()`);
+          const measure = async (selector) => evaluate(`(() => {
+            const node = document.querySelector(${JSON.stringify(selector)});
+            if (!node) throw new Error('Missing diagnostic control: ' + ${JSON.stringify(selector)});
+            const box = (element) => {
+              if (!element) return null;
+              const r = element.getBoundingClientRect();
+              return { x: r.x, y: r.y, width: r.width, height: r.height, centerX: r.x + r.width / 2, centerY: r.y + r.height / 2 };
+            };
+            const style = (element) => {
+              const s = getComputedStyle(element);
+              return { fontFamily: s.fontFamily, fontSize: s.fontSize, fontWeight: s.fontWeight,
+                font: s.font, lineHeight: s.lineHeight, letterSpacing: s.letterSpacing,
+                paddingBlockStart: s.paddingBlockStart, paddingBlockEnd: s.paddingBlockEnd,
+                borderBlockStartWidth: s.borderBlockStartWidth, borderBlockEndWidth: s.borderBlockEndWidth,
+                display: s.display, alignItems: s.alignItems, justifyContent: s.justifyContent,
+                verticalAlign: s.verticalAlign, appearance: s.appearance, transform: s.transform,
+                zoom: s.zoom, textAlign: s.textAlign, boxSizing: s.boxSizing };
+            };
+            const svg = node.matches('svg') ? node : node.querySelector('svg');
+            const path = svg?.querySelector('path, line, circle, polyline');
+            const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+            let textNode;
+            while (walker.nextNode()) if (walker.currentNode.textContent?.trim()) { textNode = walker.currentNode; break; }
+            const range = textNode && document.createRange();
+            if (range) range.selectNodeContents(textNode);
+            const textOwner = textNode?.parentElement;
+            const s = getComputedStyle(textOwner || node);
+            const text = node instanceof HTMLSelectElement ? node.selectedOptions[0]?.textContent?.trim() : textNode?.textContent?.trim();
+            const canvas = document.createElement('canvas').getContext('2d');
+            canvas.font = s.font;
+            const m = canvas.measureText(text || '');
+            return { selector: ${JSON.stringify(selector)}, text, box: box(node), style: style(node),
+              parent: node.parentElement && { box: box(node.parentElement), style: style(node.parentElement) },
+              textOwner: textOwner && { box: box(textOwner), style: style(textOwner) },
+              textRange: range && box(range),
+              canvas: { ascent: m.actualBoundingBoxAscent, descent: m.actualBoundingBoxDescent, width: m.width,
+                fontBoundingBoxAscent: m.fontBoundingBoxAscent, fontBoundingBoxDescent: m.fontBoundingBoxDescent },
+              svg: svg && { box: box(svg), viewBox: svg.getAttribute('viewBox'), style: style(svg),
+                pathBox: box(path), pathBBox: path && (() => { const b = path.getBBox(); return { x:b.x, y:b.y, width:b.width, height:b.height }; })() },
+              viewport: { innerWidth, innerHeight, devicePixelRatio, visualScale: visualViewport?.scale,
+                rootFont: style(document.documentElement), bodyFont: style(document.body) } };
+          })()`);
+          const platformFonts = async (selector) => {
+            const { root } = await command('DOM.getDocument', { depth: -1 });
+            const { nodeId } = await command('DOM.querySelector', { nodeId: root.nodeId, selector });
+            if (!nodeId) return [];
+            return (await command('CSS.getPlatformFontsForNode', { nodeId })).fonts;
+          };
+
+          await command("Page.enable");
+          await command("Runtime.enable");
+          await command("DOM.enable");
+          await command("CSS.enable");
+          const launchedPid = Number.parseInt(
+            fs.readFileSync(path.join(process.env.VERIFICATION_DIR, "everia.pid"), "utf8"),
+            10
+          );
+          const resizeWindow = (width, height) =>
+            execFileSync("pwsh", [
+              "-NoProfile",
+              "-File",
+              process.env.EVERIA_RESIZE_SCRIPT,
+              "-ProcessId",
+              String(launchedPid),
+              "-Width",
+              String(width),
+              "-Height",
+              String(height)
+            ], { stdio: "inherit" });
+
+          await evaluate(`(() => {
+            const items = Array.from({ length: 15 }, (_, index) => ({
+              id: "responsive-game-" + index,
+              title: index === 0 ? "Cities: Skylines" : "Responsive Library Entry " + (index + 1),
+              category: "games",
+              creator: index === 0 ? "Colossal Order" : "Everia QA",
+              releaseDate: "2015-03-10",
+              coverUrl: "assets/categories/games.png",
+              description: "A local-first responsive validation entry.",
+              notes: "No personal notes yet.",
+              status: "Planning",
+              rating: index === 0 ? 9 : undefined,
+              favorite: false,
+              source: "Manual",
+              dateAdded: "2026-09-10"
+            }));
+            localStorage.setItem("everia.items.v1", JSON.stringify(items));
+          })()`);
+          await command("Page.reload");
+          await waitFor(".home-page");
+
+          const reports = [];
+          for (const target of [
+            { name: "1920x1080", width: 1920, height: 1080, minimumProgress: 0.65 },
+            { name: "2560x1440", width: 2560, height: 1440, minimumProgress: 0.98 }
+          ]) {
+            resizeWindow(target.width, target.height);
+            await pause(1500);
+            await command("Page.reload");
+            await waitFor(".home-page");
+
+            const home = await state();
+            const categoryNames = await evaluate("[...document.querySelectorAll('.category-card strong')].map((node) => node.textContent.trim())");
+            if (categoryNames.length !== 6) throw new Error(target.name + " Home does not show six categories.");
+            if (home.horizontalOverflow || home.verticalOverflow) throw new Error(target.name + " Home overflowed.");
+            await capture(target.name + "-home");
+
+            await evaluate("[...document.querySelectorAll('.category-card strong')].find((node) => node.textContent.trim() === 'Games').closest('button').click()");
+            await waitFor(".library-page");
+            const libraryBefore = await evaluate(`(() => {
+              const page = document.querySelector(".library-page").getBoundingClientRect();
+              const cards = [...document.querySelectorAll(".media-card")].map((card) => card.getBoundingClientRect());
+              const firstTop = cards[0]?.top;
+              return {
+                pageX: page.x,
+                pageWidth: page.width,
+                cardX: cards[0]?.x,
+                cardWidth: cards[0]?.width,
+                columns: cards.filter((card) => Math.abs(card.top - firstTop) < 1).length,
+                horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+              };
+            })()`);
+            await evaluate(`(() => {
+              const filler = document.createElement("div");
+              filler.id = "scrollbar-layout-probe";
+              filler.style.height = "200vh";
+              filler.style.width = "1px";
+              document.querySelector("main").appendChild(filler);
+            })()`);
+            await pause();
+            const libraryWithScrollbar = await evaluate(`(() => {
+              const page = document.querySelector(".library-page").getBoundingClientRect();
+              const cards = [...document.querySelectorAll(".media-card")].map((card) => card.getBoundingClientRect());
+              const firstTop = cards[0]?.top;
+              return {
+                pageX: page.x,
+                pageWidth: page.width,
+                cardX: cards[0]?.x,
+                cardWidth: cards[0]?.width,
+                columns: cards.filter((card) => Math.abs(card.top - firstTop) < 1).length,
+                horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+              };
+            })()`);
+            await evaluate("document.querySelector('#scrollbar-layout-probe').remove()");
+            if (
+              libraryBefore.columns !== libraryWithScrollbar.columns ||
+              Math.abs(libraryBefore.cardX - libraryWithScrollbar.cardX) > 0.5 ||
+              Math.abs(libraryBefore.cardWidth - libraryWithScrollbar.cardWidth) > 1.5 ||
+              libraryWithScrollbar.horizontalOverflow
+            ) throw new Error(target.name + " scrollbar changed Library geometry.");
+            await capture(target.name + "-library");
+
+            const libraryState = await state();
+            if (libraryState.responsiveProgress < target.minimumProgress)
+              throw new Error(target.name + " responsive progress remained compact: " + libraryState.responsiveProgress);
+            if (libraryState.horizontalOverflow) throw new Error(target.name + " Library overflowed horizontally.");
+            const toolbar = await evaluate(`(() => {
+              const box = (selector) => {
+                const node = document.querySelector(selector);
+                const rect = node.getBoundingClientRect();
+                return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2, width: rect.width, height: rect.height };
+              };
+              return {
+                add: box('.add-button'), addContent: box('.add-button-content'),
+                select: box('.sort-select select'), arrow: box('.sort-select svg'),
+                segments: [...document.querySelectorAll('.view-toggle button')].map((button) => {
+                  const rect = button.getBoundingClientRect();
+                  const icon = button.querySelector('svg').getBoundingClientRect();
+                  return { width: rect.width, iconOffsetX: icon.x + icon.width / 2 - (rect.x + rect.width / 2),
+                    iconOffsetY: icon.y + icon.height / 2 - (rect.y + rect.height / 2) };
+                })
+              };
+            })()`);
+            if (Math.abs(toolbar.add.centerX - toolbar.addContent.centerX) > 1 ||
+                Math.abs(toolbar.add.centerY - toolbar.addContent.centerY) > 1 ||
+                Math.abs(toolbar.select.centerY - toolbar.arrow.centerY) > 1 ||
+                toolbar.segments.length !== 2 ||
+                Math.abs(toolbar.segments[0].width - toolbar.segments[1].width) > 0.5 ||
+                toolbar.segments.some((segment) => Math.abs(segment.iconOffsetX) > 1 || Math.abs(segment.iconOffsetY) > 1))
+              throw new Error(target.name + " Library toolbar content alignment failed: " + JSON.stringify(toolbar));
+
+            const controlDiagnostics = {
+              sort: await measure('.sort-select select'),
+              add: await measure('.add-button'),
+              addText: await measure('.add-button-content > span'),
+              addIcon: await measure('.add-button-content svg'),
+              fonts: { add: await platformFonts('.add-button-content > span'), sort: await platformFonts('.sort-select select') }
+            };
+            await evaluate("document.querySelector('.add-button').click()");
+            await waitFor('.editor-modal');
+            await evaluate("document.querySelectorAll('.add-mode-toggle button')[1].click()");
+            await waitFor('.form-grid');
+            controlDiagnostics.addCategory = await measure('.form-grid select');
+            controlDiagnostics.addStatus = await measure('.form-grid label:has(select option[value="Planning"]) select');
+            controlDiagnostics.saveButton = await measure('.modal-actions .primary');
+            controlDiagnostics.saveIcon = await measure('.modal-actions .primary svg');
+            controlDiagnostics.fonts.save = await platformFonts('.modal-actions .primary');
+            controlDiagnostics.fonts.category = await platformFonts('.form-grid select');
+            await capture(target.name + '-add-editor-diagnostic');
+            await evaluate("document.querySelector('.modal-header .icon-button').click()");
+            await waitFor('.library-page');
+
+            await evaluate("document.querySelector('.media-card').click()");
+            await waitFor(".detail-page");
+            const details = await state();
+            controlDiagnostics.detailsStatus = await measure('.status-select-wrap select');
+            controlDiagnostics.statusDot = await measure('.status-select-wrap i.status');
+            controlDiagnostics.detailsChevron = await measure('.status-select-wrap .control-select svg');
+            if (Math.abs(controlDiagnostics.detailsStatus.box.width - 156) > 1)
+              throw new Error(target.name + ' Details Status outer width changed: ' + controlDiagnostics.detailsStatus.box.width);
+            controlDiagnostics.fonts.detailsStatus = await platformFonts('.status-select-wrap select');
+            if (details.horizontalOverflow) throw new Error(target.name + " details overflowed horizontally.");
+            await capture(target.name + "-entry-details");
+
+            await evaluate("document.querySelector('.edit-button').click()");
+            await waitFor(".detail-edit");
+            const edit = await state();
+            controlDiagnostics.editCategory = await measure('.edit-grid select');
+            controlDiagnostics.editStatus = await measure('.edit-grid select[aria-label]');
+            controlDiagnostics.fonts.editCategory = await platformFonts('.edit-grid select');
+            if (edit.horizontalOverflow) throw new Error(target.name + " edit view overflowed horizontally.");
+            await capture(target.name + "-edit-entry");
+
+            await evaluate("document.querySelector('.sidebar button[title=Settings]').click()");
+            await waitFor(".settings-page");
+            const settings = await state();
+            const providerCards = await evaluate("document.querySelectorAll('.provider-setting').length");
+            if (providerCards !== 7) throw new Error(target.name + " Settings provider layout is incomplete.");
+            if (settings.horizontalOverflow) throw new Error(target.name + " Settings overflowed horizontally.");
+            const stage4 = await evaluate(`(() => ({
+              backupSection: Boolean(document.querySelector('#backup-restore')),
+              automaticToggle: Boolean(document.querySelector('#backup-restore input[type=checkbox]')),
+              backupAction: Boolean(document.querySelector('#backup-restore .backup-actions button')),
+              restoreAction: document.querySelectorAll('#backup-restore .backup-actions button').length === 2,
+              applyDisabled: document.querySelector('.settings-apply')?.disabled,
+              dirtyDialogAbsent: !document.querySelector('.settings-exit-dialog')
+            }))()`);
+            if (!stage4.backupSection || !stage4.automaticToggle || !stage4.backupAction ||
+                !stage4.restoreAction || !stage4.applyDisabled || !stage4.dirtyDialogAbsent)
+              throw new Error(target.name + " Stage 4 Settings controls failed: " + JSON.stringify(stage4));
+            const controls = await evaluate(`(() => {
+              const center = (node) => { const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
+              const selects = [...document.querySelectorAll('.control-select')].map((wrapper) => {
+                const select = wrapper.querySelector('select');
+                const arrow = wrapper.querySelector('svg');
+                return { native: select instanceof HTMLSelectElement, appearance: getComputedStyle(select).appearance,
+                  arrowDy: center(arrow).y - center(select).y, arrowSide: center(arrow).x - center(select).x,
+                  pointerEvents: getComputedStyle(arrow).pointerEvents,
+                  textAlign: getComputedStyle(select).textAlign };
+              });
+              const action = document.querySelector('.settings-content > .secondary');
+              const actionText = document.createRange(); actionText.selectNodeContents(action);
+              const actionCenter = center(action), textRect = actionText.getBoundingClientRect();
+              const file = document.querySelector('.wallpaper-picker input[type=file]');
+              return { selects, actionTextDx: textRect.x + textRect.width / 2 - actionCenter.x,
+                actionTextDy: textRect.y + textRect.height / 2 - actionCenter.y,
+                cardTextAlign: getComputedStyle(document.querySelector('.background-modes button')).textAlign,
+                fileNative: file instanceof HTMLInputElement && file.type === 'file',
+                fileButtonGap: getComputedStyle(file, '::file-selector-button').marginInlineEnd };
+            })()`);
+            if (controls.selects.length !== 3 || controls.selects.some((select) => !select.native || select.appearance !== 'none' ||
+                select.pointerEvents !== 'none' || Math.abs(select.arrowDy) > 1 || select.arrowSide < 0 || select.textAlign !== 'start') ||
+                Math.abs(controls.actionTextDx) > 1 || Math.abs(controls.actionTextDy) > 2 ||
+                controls.cardTextAlign !== 'start' || !controls.fileNative || controls.fileButtonGap !== '8px')
+              throw new Error(target.name + " Settings control alignment failed: " + JSON.stringify(controls));
+            await capture(target.name + "-settings");
+
+            const scaleReports = [];
+            for (const userScale of [1, 1.1, 1.25, 1.5]) {
+              await evaluate(`localStorage.setItem('everia.interface-scale.v1', ${JSON.stringify(JSON.stringify(userScale))})`);
+              await command("Page.reload");
+              await waitFor('.home-page');
+              await pause(400);
+              const scaledHome = await state();
+              if (scaledHome.horizontalOverflow) throw new Error(target.name + " scale " + userScale + " Home overflowed horizontally.");
+              await evaluate("document.querySelector('.category-card').click()");
+              await waitFor('.library-page');
+              const scaledLibrary = await state();
+              const cardCount = await evaluate(`(() => {
+                const cards = [...document.querySelectorAll('.media-card')].map((card) => card.getBoundingClientRect());
+                return cards.filter((card) => Math.abs(card.top - cards[0].top) < 1).length;
+              })()`);
+              if (scaledLibrary.horizontalOverflow || scaledLibrary.responsiveProgress < target.minimumProgress)
+                throw new Error(target.name + " scale " + userScale + " Library state failed: " + JSON.stringify(scaledLibrary));
+              await capture(target.name + "-scale-" + Math.round(userScale * 100) + "-library");
+              await evaluate("document.querySelector('.media-card').click()");
+              await waitFor('.detail-page');
+              if ((await state()).horizontalOverflow) throw new Error(target.name + " scale " + userScale + " Details overflowed.");
+              await evaluate("document.querySelector('.edit-button').click()");
+              await waitFor('.detail-edit');
+              if ((await state()).horizontalOverflow) throw new Error(target.name + " scale " + userScale + " Edit overflowed.");
+              await evaluate("document.querySelector('.settings-link').click()");
+              await waitFor('.settings-page');
+              const scaledSettings = await state();
+              const selectedScale = await evaluate("document.querySelector('select[aria-label=\"Interface Scale\"]').value");
+              if (scaledSettings.horizontalOverflow || Number(selectedScale) !== userScale)
+                throw new Error(target.name + " scale " + userScale + " Settings failed: " + JSON.stringify({ scaledSettings, selectedScale }));
+              scaleReports.push({ userScale, home: scaledHome, library: scaledLibrary, settings: scaledSettings, cardsPerRow: cardCount });
+            }
+            for (let index = 1; index < scaleReports.length; index++)
+              if (scaleReports[index].library.innerWidth >= scaleReports[index - 1].library.innerWidth)
+                throw new Error(target.name + " scales did not increase presentation size monotonically: " + JSON.stringify(scaleReports));
+            if (target.name === "1920x1080") {
+              const preview = await evaluate(`(() => {
+                const select = document.querySelector('select[aria-label="Interface Scale"]');
+                const before = localStorage.getItem('everia.interface-scale.v1');
+                Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, '1.25');
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                return { before, after: localStorage.getItem('everia.interface-scale.v1') };
+              })()`);
+              if (preview.before !== '1.5' || preview.after !== '1.5')
+                throw new Error("Scale preview persisted without Apply: " + JSON.stringify(preview));
+              await evaluate("document.querySelector('.settings-apply').click()");
+              await pause(500);
+              if ((await evaluate("localStorage.getItem('everia.interface-scale.v1')")) !== '1.25')
+                throw new Error("Apply did not persist the selected Interface Scale.");
+              await command("Page.reload");
+              await waitFor('.home-page');
+              await pause(300);
+              const beforeTransition = await state();
+              if (beforeTransition.innerWidth <= scaleReports.at(-1).home.innerWidth)
+                throw new Error("Applied scale did not restore after restart.");
+              resizeWindow(2560, 1440);
+              await pause(700);
+              resizeWindow(1920, 1080);
+              await pause(700);
+              const returned = await state();
+              if (Math.abs(returned.innerWidth - beforeTransition.innerWidth) > 2 || returned.horizontalOverflow)
+                throw new Error("Display round trip compounded the user scale.");
+            }
+            await evaluate("localStorage.setItem('everia.interface-scale.v1', '1')");
+            await command("Page.reload");
+            await waitFor('.home-page');
+
+            reports.push({
+              requestedViewport: target,
+              home,
+              library: libraryState,
+              details,
+              edit,
+              settings,
+              libraryBefore,
+              libraryWithScrollbar,
+              toolbar,
+              controls,
+              controlDiagnostics,
+              scaleReports
+            });
+          }
+
+          fs.writeFileSync(
+            path.join(process.env.VERIFICATION_DIR, "responsive-verification.json"),
+            JSON.stringify({
+              sourceCommit: process.env.SOURCE_SHA,
+              screens: ["Home", "Library", "Entry Details", "Edit Entry", "Settings"],
+              scrollbarGeometryStable: true,
+              noUnexpectedHorizontalScrolling: true,
+              reports
+            }, null, 2)
+          );
+          socket.close();
+          '@ | Set-Content $scriptPath -Encoding utf8
+          node $scriptPath
+
+      - name: Stop Everia after launch validation
+        if: always()
+        shell: pwsh
+        run: |
+          $pidFile = "$env:VERIFICATION_DIR/everia.pid"
+          if (Test-Path $pidFile) {
+            $everiaPid = [int](Get-Content $pidFile)
+            Stop-Process -Id $everiaPid -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Smoke-test packaged locale startup and logical sidebar side
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $scriptPath = Join-Path $env:RUNNER_TEMP "everia-stage4-locale-smoke.mjs"
+          @'
+          import fs from "node:fs";
+          import path from "node:path";
+          import { spawn } from "node:child_process";
+
+          const exe = path.resolve("release/Everia-win32-x64/Everia.exe");
+          const profile = path.join(process.env.RUNNER_TEMP, "everia-stage4-locale-profile");
+          const port = 9477;
+          const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const reports = [];
+          for (const [locale, next] of [["en", "fr"], ["fr", "ar"], ["ar", null]]) {
+            const child = spawn(exe, [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`], { stdio: "ignore" });
+            let socket;
+            try {
+              let page;
+              for (let attempt = 0; attempt < 90; attempt++) {
+                if (child.exitCode !== null) throw new Error(`Everia exited during ${locale} startup: ${child.exitCode}`);
+                try {
+                  const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+                  page = targets.find((target) => target.type === "page" && String(target.url).startsWith("file:"));
+                  if (page?.webSocketDebuggerUrl) break;
+                } catch {}
+                await pause(500);
+              }
+              if (!page?.webSocketDebuggerUrl) throw new Error(`No packaged renderer for ${locale}`);
+              socket = new WebSocket(page.webSocketDebuggerUrl);
+              await new Promise((resolve, reject) => {
+                socket.addEventListener("open", resolve, { once: true });
+                socket.addEventListener("error", reject, { once: true });
+              });
+              let id = 0;
+              const pending = new Map();
+              socket.addEventListener("message", (event) => {
+                const message = JSON.parse(String(event.data));
+                const waiter = pending.get(message.id);
+                if (!waiter) return;
+                pending.delete(message.id);
+                message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);
+              });
+              const command = (method, params = {}) => new Promise((resolve, reject) => {
+                const key = ++id;
+                pending.set(key, { resolve, reject });
+                socket.send(JSON.stringify({ id: key, method, params }));
+              });
+              const evaluate = async (expression) => {
+                const response = await command("Runtime.evaluate", { expression, returnByValue: true });
+                if (response.exceptionDetails) throw new Error(JSON.stringify(response.exceptionDetails));
+                return response.result.value;
+              };
+              let state;
+              for (let attempt = 0; attempt < 60; attempt++) {
+                state = await evaluate(`(() => {
+                  const sidebar = document.querySelector('.sidebar');
+                  const main = document.querySelector('main');
+                  return {
+                    lang: document.documentElement.lang,
+                    dir: document.documentElement.dir,
+                    home: Boolean(document.querySelector('.home-page')),
+                    cards: document.querySelectorAll('.category-card').length,
+                    storedLocale: localStorage.getItem('everia.locale.v1'),
+                    sidebarSide: sidebar ? (sidebar.getBoundingClientRect().left < innerWidth / 2 ? 'left' : 'right') : null,
+                    mainOffset: main ? Math.round(main.getBoundingClientRect().left) : null,
+                    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+                  };
+                })()`);
+                if (state.home && state.cards === 6 && state.lang === locale) break;
+                await pause(300);
+              }
+              const expectedDirection = locale === "ar" ? "rtl" : "ltr";
+              if (!state.home || state.cards !== 6 || state.lang !== locale || state.dir !== expectedDirection || state.horizontalOverflow)
+                throw new Error(`Incorrect ${locale} packaged startup: ${JSON.stringify(state)}`);
+              await evaluate("document.querySelector('.category-card').click()");
+              await pause(500);
+              const layout = await evaluate(`(() => {
+                const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
+                const main = document.querySelector('main').getBoundingClientRect();
+                const center = (node) => { const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width }; };
+                const add = center(document.querySelector('.add-button'));
+                const addContent = center(document.querySelector('.add-button-content'));
+                const select = center(document.querySelector('.sort-select select'));
+                const arrow = center(document.querySelector('.sort-select svg'));
+                const segments = [...document.querySelectorAll('.view-toggle button')].map((button) => {
+                  const a = center(button), b = center(button.querySelector('svg'));
+                  return { width: a.width, dx: b.x - a.x, dy: b.y - a.y };
+                });
+                return { side: sidebar.left < innerWidth / 2 ? 'left' : 'right', mainLeft: main.left, mainRight: main.right, sidebarLeft: sidebar.left, sidebarRight: sidebar.right,
+                  horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+                  toolbar: { addDx: addContent.x - add.x, addDy: addContent.y - add.y, arrowDy: arrow.y - select.y, segments } };
+              })()`);
+              if (layout.side !== (locale === "ar" ? "right" : "left") || layout.horizontalOverflow ||
+                  (locale === "ar" ? Math.abs(layout.mainRight - layout.sidebarLeft) > 2 : Math.abs(layout.mainLeft - layout.sidebarRight) > 2))
+                throw new Error(`Incorrect ${locale} sidebar geometry: ${JSON.stringify(layout)}`);
+              if (Math.abs(layout.toolbar.addDx) > 1 || Math.abs(layout.toolbar.addDy) > 1 ||
+                  Math.abs(layout.toolbar.arrowDy) > 1 || layout.toolbar.segments.length !== 2 ||
+                  Math.abs(layout.toolbar.segments[0].width - layout.toolbar.segments[1].width) > 0.5 ||
+                  layout.toolbar.segments.some((segment) => Math.abs(segment.dx) > 1 || Math.abs(segment.dy) > 1))
+                throw new Error(`Incorrect ${locale} Library toolbar alignment: ${JSON.stringify(layout.toolbar)}`);
+              await evaluate("document.querySelector('.settings-link').click()");
+              await pause(400);
+              const controlLayout = await evaluate(`(() => {
+                const center = (node) => { const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
+                return [...document.querySelectorAll('.control-select')].map((wrapper) => {
+                  const select = wrapper.querySelector('select'), arrow = wrapper.querySelector('svg');
+                  return { native: select instanceof HTMLSelectElement, appearance: getComputedStyle(select).appearance,
+                    dy: center(arrow).y - center(select).y, dx: center(arrow).x - center(select).x,
+                    textAlign: getComputedStyle(select).textAlign };
+                });
+              })()`);
+              if (controlLayout.length !== 3 || controlLayout.some((control) => !control.native || control.appearance !== 'none' ||
+                  Math.abs(control.dy) > 1 || control.textAlign !== 'start' || (locale === 'ar' ? control.dx >= 0 : control.dx <= 0)))
+                throw new Error(`Incorrect ${locale} Settings control alignment: ${JSON.stringify(controlLayout)}`);
+              await evaluate("document.querySelector('.add-button').click()");
+              await pause(250);
+              await evaluate("document.querySelectorAll('.add-mode-toggle button')[1].click()");
+              await pause(250);
+              const editorSelects = await evaluate(`(() => {
+                const center = (node) => { const r = node.getBoundingClientRect(); return { x:r.x+r.width/2, y:r.y+r.height/2 }; };
+                return [...document.querySelectorAll('.form-grid .control-select')].map((wrapper) => {
+                  const select = wrapper.querySelector('select'), arrow = wrapper.querySelector('svg');
+                  return { value:select.value, appearance:getComputedStyle(select).appearance, lineHeight:getComputedStyle(select).lineHeight,
+                    height:select.getBoundingClientRect().height, dy:center(arrow).y-center(select).y,
+                    dx:center(arrow).x-center(select).x, options:select.options.length };
+                });
+              })()`);
+              if (editorSelects.length < 2 || editorSelects.some((control) => control.appearance !== 'none' ||
+                  control.lineHeight === 'normal' || Math.abs(control.dy) > 1 || control.options < 2 ||
+                  (locale === 'ar' ? control.dx >= 0 : control.dx <= 0)))
+                throw new Error(`Incorrect ${locale} Add/Edit select presentation: ${JSON.stringify(editorSelects)}`);
+              await evaluate("document.querySelector('.form-grid .control-select select').focus()");
+              await command("Input.dispatchKeyEvent", { type:'keyDown', key:'ArrowDown', code:'ArrowDown', windowsVirtualKeyCode:40 });
+              await command("Input.dispatchKeyEvent", { type:'keyUp', key:'ArrowDown', code:'ArrowDown', windowsVirtualKeyCode:40 });
+              await pause(200);
+              const keyboardValue = await evaluate("document.querySelector('.form-grid .control-select select').value");
+              if (keyboardValue === editorSelects[0].value)
+                throw new Error(`${locale} native Category select did not respond to ArrowDown`);
+              const scaleMatrix = [];
+              for (const userScale of [1, 1.1, 1.25, 1.5]) {
+                await evaluate(`localStorage.setItem('everia.interface-scale.v1', ${JSON.stringify(JSON.stringify(userScale))})`);
+                await command('Page.reload');
+                let scaled;
+                for (let attempt = 0; attempt < 50; attempt++) {
+                  scaled = await evaluate(`(() => ({
+                    home: Boolean(document.querySelector('.home-page')),
+                    lang: document.documentElement.lang,
+                    dir: document.documentElement.dir,
+                    width: innerWidth,
+                    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+                    storedScale: localStorage.getItem('everia.interface-scale.v1')
+                  }))()`);
+                  if (scaled.home && scaled.lang === locale) break;
+                  await pause(200);
+                }
+                if (!scaled.home || scaled.lang !== locale || scaled.dir !== expectedDirection ||
+                    scaled.horizontalOverflow || Number(scaled.storedScale) !== userScale)
+                  throw new Error(`Incorrect ${locale} scale ${userScale} startup: ${JSON.stringify(scaled)}`);
+                scaleMatrix.push({ userScale, ...scaled });
+              }
+              for (let index = 1; index < scaleMatrix.length; index++)
+                if (scaleMatrix[index].width >= scaleMatrix[index - 1].width)
+                  throw new Error(`${locale} scale matrix is not monotonic: ${JSON.stringify(scaleMatrix)}`);
+              reports.push({ locale, ...state, layout, controlLayout, editorSelects, keyboardValue, scaleMatrix });
+              await evaluate("localStorage.setItem('everia.interface-scale.v1', '1')");
+              if (next) await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(next))})`);
+              try { await evaluate("window.close()"); } catch { /* Window may close before CDP replies. */ }
+              for (let attempt = 0; attempt < 40 && child.exitCode === null; attempt++) await pause(250);
+              if (child.exitCode === null) throw new Error(`Everia did not close normally after ${locale} smoke`);
+            } finally {
+              socket?.close();
+              if (child.exitCode === null) child.kill();
+              await pause(500);
+            }
+          }
+          fs.writeFileSync(path.join(process.env.VERIFICATION_DIR, "locale-startup-verification.json"),
+            JSON.stringify({ sourceCommit: process.env.SOURCE_SHA, reports }, null, 2));
+          console.log(JSON.stringify(reports));
+          '@ | Set-Content $scriptPath -Encoding utf8
+          node $scriptPath
+          if ($LASTEXITCODE -ne 0) { throw "Packaged locale startup smoke failed" }
+
+      - name: Preserve cross-path profile, artwork, credential and window-state continuity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          node scripts/storage-origin-probe.cjs 2>&1 |
+            Tee-Object -FilePath "$env:VERIFICATION_DIR/cross-path-profile.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Cross-path profile probe failed" }
+
+      - name: Prove tested package unchanged and create delivery ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageRoot = (Resolve-Path $env:PACKAGE_DIR).Path
+          $afterManifest = Get-ChildItem $packageRoot -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($packageRoot, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            }
+          $beforeManifest = Get-Content "$env:VERIFICATION_DIR/package-manifest-before-launch.txt"
+          if (Compare-Object $beforeManifest $afterManifest) {
+            throw "The packaged application changed during launch testing."
+          }
+          $afterManifest | Set-Content "$env:VERIFICATION_DIR/package-manifest-launch-tested.txt" -Encoding utf8
+
+          $delivery = Join-Path $env:RUNNER_TEMP "Everia-v1.0-Stage4-Scale-Restore-QA-win-x64"
+          New-Item -ItemType Directory -Force -Path $delivery | Out-Null
+          Copy-Item $env:PACKAGE_DIR -Destination $delivery -Recurse
+          Copy-Item $env:VERIFICATION_DIR -Destination $delivery -Recurse
+          @(
+            "Everia v1.0 Stage 4 Scale and Restore portable QA — not a release or installer"
+            "Built from exact source commit: $env:SOURCE_SHA"
+            "Add item's real-PC visual alignment remains unresolved; the Stage 3 control geometry remains locked."
+            "The executable retains the existing 0.9.0 metadata because this QA stage does not bump the application version."
+            "Everia-win32-x64/Everia.exe is the exact executable that passed the launch, Home-screen, responsive-view, and scrollbar-geometry tests."
+          ) | Set-Content (Join-Path $delivery "README-FIRST.txt") -Encoding utf8
+
+          Compress-Archive -Path "$delivery/*" -DestinationPath $env:FINAL_ZIP -CompressionLevel Optimal
+          $extract = Join-Path $env:RUNNER_TEMP "everia-final-zip-check"
+          Expand-Archive -Path $env:FINAL_ZIP -DestinationPath $extract
+          $zippedPackage = Join-Path $extract "Everia-win32-x64"
+          $zippedManifest = Get-ChildItem $zippedPackage -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($zippedPackage, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            }
+          if (Compare-Object $afterManifest $zippedManifest) {
+            throw "The final ZIP does not contain the exact launch-tested package."
+          }
+
+          $extractedExe = Join-Path $zippedPackage "Everia.exe"
+          if ((Get-FileHash $extractedExe -Algorithm SHA256).Hash -ne (Get-FileHash "$env:PACKAGE_DIR/Everia.exe" -Algorithm SHA256).Hash) {
+            throw "Extracted Everia.exe differs from the launch-tested executable."
+          }
+          $extractedProcess = Start-Process -FilePath $extractedExe -ArgumentList @(
+            "--remote-debugging-port=9488",
+            "--user-data-dir=$(Join-Path $env:RUNNER_TEMP 'everia-stage4-extracted-profile')"
+          ) -PassThru
+          try {
+            $target = $null
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+              Start-Sleep -Milliseconds 500
+              if ($extractedProcess.HasExited) {
+                throw "Extracted Everia.exe exited on startup: $($extractedProcess.ExitCode)"
+              }
+              try {
+                $target = @(Invoke-RestMethod "http://127.0.0.1:9488/json/list") |
+                  Where-Object { $_.type -eq "page" -and $_.url -like "file:*" } |
+                  Select-Object -First 1
+                if ($target) { break }
+              } catch { }
+            }
+            if (-not $target) { throw "Extracted Everia.exe did not expose its renderer." }
+          } finally {
+            Stop-Process -Id $extractedProcess.Id -Force -ErrorAction SilentlyContinue
+          }
+          $extractedAfterLaunch = Get-ChildItem $zippedPackage -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($zippedPackage, $_.FullName)
+              "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash) *$relative"
+            }
+          if (Compare-Object $zippedManifest $extractedAfterLaunch) {
+            throw "The extracted application changed during launch."
+          }
+
+          [ordered]@{
+            sourceCommit = $env:SOURCE_SHA
+            finalZip = $env:FINAL_ZIP
+            finalZipBytes = (Get-Item $env:FINAL_ZIP).Length
+            finalZipSha256 = (Get-FileHash $env:FINAL_ZIP -Algorithm SHA256).Hash
+            executableSha256 = (Get-FileHash "$zippedPackage/Everia.exe" -Algorithm SHA256).Hash
+            matchesLaunchTestedPackage = $true
+            extractedCopyLaunched = $true
+            extractedPackageUnchangedByLaunch = $true
+          } | ConvertTo-Json | Set-Content "$env:VERIFICATION_DIR/final-zip-verification.json" -Encoding utf8
+          Get-Content "$env:VERIFICATION_DIR/final-zip-verification.json"
+
+      - name: Upload exact launch-tested delivery
+        uses: actions/upload-artifact@v7
+        with:
+          name: Everia-v1.0-Stage4-Scale-Restore-QA-win-x64
+          path: Everia-v1.0-Stage4-Scale-Restore-QA-win-x64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload launch evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: Everia-v1.0-Stage4-Scale-Restore-QA-verification
+          path: verification
+          if-no-files-found: error
+          retention-days: 30

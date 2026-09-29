@@ -39,6 +39,7 @@ export const en = {
   "backup.creating": "Creating backup…",
   "backup.backUpNow": "Back Up Now",
   "backup.restore": "Restore Backup",
+  "backup.cancelRestore": "Cancel",
   "backup.confirmRestore":
     "Replace your library, settings and images with the validated backup? Provider credentials will not be restored.",
   "backup.credentialsExcluded":
@@ -47,6 +48,7 @@ export const en = {
   "settings.personalize": "PERSONALIZE",
   "settings.intro": "Shape Everia into a universe that feels like yours.",
   "settings.appearance": "Appearance",
+  "settings.interfaceScale": "Interface Scale",
   "settings.appearanceDescription":
     "Keep Everia readable while choosing the colors that feel like yours.",
   "settings.accentColor": "Accent color",
@@ -375,6 +377,7 @@ export const fr = {
   "backup.creating": "Création de la sauvegarde…",
   "backup.backUpNow": "Sauvegarder maintenant",
   "backup.restore": "Restaurer une sauvegarde",
+  "backup.cancelRestore": "Annuler",
   "backup.confirmRestore":
     "Remplacer la collection, les paramètres et les images par la sauvegarde validée ? Les identifiants des sources ne seront pas restaurés.",
   "backup.credentialsExcluded":
@@ -383,6 +386,7 @@ export const fr = {
   "settings.personalize": "PERSONNALISER",
   "settings.intro": "Faites d’Everia un univers qui vous ressemble.",
   "settings.appearance": "Apparence",
+  "settings.interfaceScale": "Échelle de l’interface",
   "settings.appearanceDescription":
     "Choisissez vos couleurs tout en préservant la lisibilité d’Everia.",
   "settings.accentColor": "Couleur d’accentuation",
@@ -711,6 +715,7 @@ export const ar = {
   "backup.creating": "جارٍ إنشاء النسخة الاحتياطية…",
   "backup.backUpNow": "نسخ احتياطي الآن",
   "backup.restore": "استعادة نسخة احتياطية",
+  "backup.cancelRestore": "إلغاء",
   "backup.confirmRestore":
     "هل تريد استبدال المكتبة والإعدادات والصور بمحتويات النسخة التي تم التحقق منها؟ لن تُستعاد بيانات اعتماد المصادر.",
   "backup.credentialsExcluded":
@@ -719,6 +724,7 @@ export const ar = {
   "settings.personalize": "تخصيص",
   "settings.intro": "اجعل Everia عالمًا يناسبك.",
   "settings.appearance": "المظهر",
+  "settings.interfaceScale": "مقياس الواجهة",
   "settings.appearanceDescription":
     "اختر ألوانك مع الحفاظ على سهولة قراءة Everia.",
   "settings.accentColor": "لون التمييز",

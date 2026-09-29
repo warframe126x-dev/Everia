@@ -83,6 +83,9 @@ function App() {
   const [items, setItems] = useState<MediaItem[]>(storage.loadItems);
   const [theme, setTheme] = useState<ThemeSettings>(storage.loadTheme);
   const [committedLocale, setCommittedLocale] = useState(storage.loadLocale);
+  const [committedScale, setCommittedScale] = useState(
+    storage.loadInterfaceScale,
+  );
   const [backupConfig, setBackupConfig] = useState<Awaited<
     ReturnType<NonNullable<typeof window.everiaBackup>["config"]>
   > | null>(null);
@@ -91,6 +94,7 @@ function App() {
     freshDraft({
       theme: storage.loadTheme(),
       locale: storage.loadLocale(),
+      interfaceScale: storage.loadInterfaceScale(),
       backupEnabled: null,
       backupDestination: null,
     }),
@@ -103,6 +107,13 @@ function App() {
     | null
   >(null);
   const [restoreNotice, setRestoreNotice] = useState<StringKey | "">("");
+  const [pendingRestoreFile, setPendingRestoreFile] = useState<string | null>(
+    null,
+  );
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const restoreInFlight = useRef(false);
+  const restoreCancelButton = useRef<HTMLButtonElement>(null);
+  const restoreConfirmButton = useRef<HTMLButtonElement>(null);
   const [stagedWallpaperUrl, setStagedWallpaperUrl] = useState<string>();
   const [sorts, setSorts] = useState<Record<string, SortKey>>(
     storage.loadSorts,
@@ -135,11 +146,26 @@ function App() {
   const committedSettings: SettingsValues = {
     theme,
     locale: committedLocale,
+    interfaceScale: committedScale,
     backupEnabled: backupConfig?.enabled ?? null,
     backupDestination: backupConfig?.destination ?? null,
   };
   const dirtySettings = settingsDirty(committedSettings, draft);
   const visibleTheme = view === "settings" ? draft.theme : theme;
+  const visibleScale =
+    view === "settings" ? draft.interfaceScale : committedScale;
+  useEffect(() => {
+    if (pendingRestoreFile === null) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    restoreCancelButton.current?.focus();
+    return () => previousFocus?.focus();
+  }, [pendingRestoreFile]);
+  useEffect(() => {
+    // Preview and committed scale share the same main-process zoom owner.
+    void window.everiaWindow?.setInterfaceScale(visibleScale).catch(() => {
+      setSettingsError("settings.applyFailure");
+    });
+  }, [visibleScale]);
   const customWallpaper = useWallpaper(
     visibleTheme.backgroundMode === "custom"
       ? visibleTheme.customWallpaperId
@@ -235,6 +261,7 @@ function App() {
       const applied = await applySettingsDraft(committedSettings, draft);
       setTheme(applied.theme);
       setCommittedLocale(applied.locale);
+      setCommittedScale(applied.interfaceScale);
       previewLocale(applied.locale);
       setBackupConfig(
         (current) =>
@@ -285,8 +312,21 @@ function App() {
       const file = await window.everiaBackup?.selectBackup();
       if (!file) return;
       await parseBackup(file);
-      if (!window.confirm(t("backup.confirmRestore"))) return;
-      await restoreBackup(file);
+      setPendingRestoreFile(file);
+    } catch (restoreError) {
+      setRestoreNotice(
+        restoreError instanceof BackupFailure
+          ? backupMessageKey(restoreError)
+          : "backup.restoreFailed",
+      );
+    }
+  };
+  const confirmRestore = async () => {
+    if (pendingRestoreFile === null || restoreInFlight.current) return;
+    restoreInFlight.current = true;
+    setRestoreBusy(true);
+    try {
+      await restoreBackup(pendingRestoreFile);
       window.location.reload();
     } catch (restoreError) {
       setRestoreNotice(
@@ -294,6 +334,10 @@ function App() {
           ? backupMessageKey(restoreError)
           : "backup.restoreFailed",
       );
+    } finally {
+      restoreInFlight.current = false;
+      setRestoreBusy(false);
+      setPendingRestoreFile(null);
     }
   };
   const requestRestore = () => {
@@ -674,6 +718,55 @@ function App() {
                 onClick={() => void resolvePending("keep")}
               >
                 {t("settings.keepEditing")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingRestoreFile !== null && (
+        <div className="settings-exit-overlay">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restore-confirm-title"
+            aria-describedby="restore-confirm-description"
+            className="settings-exit-dialog"
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !restoreBusy) {
+                setPendingRestoreFile(null);
+              } else if (event.key === "Tab") {
+                const first = restoreCancelButton.current;
+                const last = restoreConfirmButton.current;
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last?.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first?.focus();
+                }
+              }
+            }}
+          >
+            <h2 id="restore-confirm-title">{t("backup.restore")}</h2>
+            <p id="restore-confirm-description">{t("backup.confirmRestore")}</p>
+            <div className="settings-exit-actions">
+              <button
+                ref={restoreCancelButton}
+                type="button"
+                className="secondary"
+                disabled={restoreBusy}
+                onClick={() => setPendingRestoreFile(null)}
+              >
+                {t("backup.cancelRestore")}
+              </button>
+              <button
+                ref={restoreConfirmButton}
+                type="button"
+                className="primary restore-confirm-action"
+                disabled={restoreBusy}
+                onClick={() => void confirmRestore()}
+              >
+                {t("backup.restore")}
               </button>
             </div>
           </div>
