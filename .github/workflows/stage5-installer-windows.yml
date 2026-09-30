@@ -532,6 +532,41 @@ jobs:
           await command("Page.reload");
           await waitFor(".home-page");
 
+          const smallHomeReports = [];
+          for (const locale of ["en", "fr", "ar"]) {
+            for (const userScale of [1, 1.1, 1.25]) {
+              resizeWindow(960, 640);
+              await evaluate(`localStorage.setItem('everia.locale.v1', ${JSON.stringify(JSON.stringify(locale))}); localStorage.setItem('everia.interface-scale.v1', '${userScale}'); true`);
+              await command("Page.reload");
+              await waitFor(".home-page");
+              await pause(1000);
+              const compact = await evaluate(`(() => {
+                const rect = n => { const r=n.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}; };
+                return { locale:document.documentElement.lang, direction:document.documentElement.dir,
+                  innerWidth, innerHeight, cards:[...document.querySelectorAll('.category-card')].map(card => ({
+                    card:rect(card), contentWidth:card.clientWidth - parseFloat(getComputedStyle(card).paddingLeft) - parseFloat(getComputedStyle(card).paddingRight),
+                    icon:rect(card.querySelector('svg')), title:rect(card.querySelector('strong')), count:rect(card.querySelector('small')),
+                    titleSize:parseFloat(getComputedStyle(card.querySelector('strong')).fontSize), countSize:parseFloat(getComputedStyle(card.querySelector('small')).fontSize)
+                  })) };
+              })()`);
+              if (compact.locale !== locale || compact.direction !== (locale === "ar" ? "rtl" : "ltr") || compact.cards.length !== 6)
+                throw new Error("Small Home locale/card state failed: " + JSON.stringify(compact));
+              for (const card of compact.cards) {
+                if (Math.abs(card.icon.width - Math.min(52, card.contentWidth * .28)) > 1 ||
+                    Math.abs(card.titleSize - Math.min(21, card.contentWidth * .12)) > .1 ||
+                    Math.abs(card.countSize - Math.min(13, card.contentWidth * .075)) > .1)
+                  throw new Error("Small Home contents do not track the card width: " + JSON.stringify(card));
+                for (const child of [card.icon, card.title, card.count]) {
+                  if (child.y < card.card.y || child.bottom > card.card.bottom + 1 || child.x < card.card.x - 1 || child.right > card.card.right + 1)
+                    throw new Error("Small Home content escaped its card: " + JSON.stringify(card));
+                }
+              }
+              await capture("minimum-home-" + locale + "-" + Math.round(userScale * 100));
+              smallHomeReports.push({ userScale, ...compact });
+            }
+          }
+          fs.writeFileSync(path.join(process.env.VERIFICATION_DIR, "minimum-home-verification.json"), JSON.stringify(smallHomeReports, null, 2));
+          await evaluate("localStorage.setItem('everia.locale.v1', '\"en\"'); localStorage.setItem('everia.interface-scale.v1', '1'); true");
           const reports = [];
           for (const target of [
             { name: "1920x1080", width: 1920, height: 1080, minimumProgress: 0.65 },
@@ -1032,7 +1067,8 @@ jobs:
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if ($result.sourceCommit -ne $env:SOURCE_SHA -or -not $result.profilePreserved -or
               -not $result.credentialsPreserved -or -not $result.backupConfigurationPreserved -or
-              -not $result.backupFilePreserved) {
+              -not $result.backupFilePreserved -or -not $result.interactiveDestination.initiallyAbsent -or
+              -not $result.interactiveDestination.directoryPageSubmitted -or -not $result.interactiveDestination.installed) {
             throw "Installer lifecycle evidence is incomplete or belongs to another source."
           }
           Get-Content $report

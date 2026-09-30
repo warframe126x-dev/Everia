@@ -236,7 +236,18 @@ async function inspect(exe, seedSettings = false) {
   const seed = await inspect(portable);
   assert.equal(seed.values["everia.locale.v1"], '"ar"');
   assert.equal(seed.values["everia.interface-scale.v1"], "1.25");
-  run(installer, ["/S", "/currentuser", `/D=${first}`]);
+  assert(!fs.existsSync(first), "Custom destination must initially be absent");
+  const interactiveDestination = JSON.parse(
+    run("pwsh", [
+      "-NoProfile",
+      "-File",
+      "scripts/installer-destination-probe.ps1",
+      "-Installer",
+      installer,
+      "-Destination",
+      first,
+    ]),
+  );
   const installed = assertInstall(first);
   assert.deepEqual(
     await inspect(installed),
@@ -343,6 +354,7 @@ async function inspect(exe, seedSettings = false) {
     installerBytes: fs.statSync(installer).size,
     installedExeSha256: hash(path.join(first, "Everia.exe")),
     customLocation: first,
+    interactiveDestination,
     changedLocation: second,
     profile,
     profilePreserved: true,

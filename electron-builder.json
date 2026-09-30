@@ -21,6 +21,7 @@
     "deleteAppDataOnUninstall": false,
     "packElevateHelper": false,
     "runAfterFinish": false,
-    "artifactName": "Everia-v1.0-Setup-win-x64.exe"
+    "artifactName": "Everia-v1.0-Setup-win-x64.exe",
+    "include": "build/installer.nsh"
   }
 }

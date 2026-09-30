@@ -1948,18 +1948,19 @@ textarea {
     font-size: 12px;
   }
   .category-card {
+    container-type: inline-size;
     gap: 3px;
     padding: 10px;
   }
   .card-icon svg {
-    width: 52px;
-    height: 52px;
+    width: min(52px, 28cqw);
+    height: min(52px, 28cqw);
   }
   .category-card strong {
-    font-size: 21px;
+    font-size: min(21px, 12cqw);
   }
   .category-card small {
-    font-size: 13px;
+    font-size: min(13px, 7.5cqw);
   }
   .home-footer {
     margin-top: 13px;
