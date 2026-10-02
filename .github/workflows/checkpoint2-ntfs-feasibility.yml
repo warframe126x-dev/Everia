@@ -1,0 +1,49 @@
+name: Checkpoint 2 isolated NTFS feasibility (no installer)
+on:
+  push:
+    branches: [qa/checkpoint2-ntfs-feasibility]
+    paths:
+      - 'tests/windows-feasibility/**'
+      - '.github/workflows/checkpoint2-ntfs-feasibility.yml'
+permissions:
+  contents: read
+jobs:
+  native-feasibility:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Verify isolated source and build native test harness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD).Trim() -ne '${{ github.sha }}') { throw 'Wrong source' }
+          if ('${{ github.ref }}' -ne 'refs/heads/qa/checkpoint2-ntfs-feasibility') { throw 'Wrong branch' }
+          git diff --name-only 5426ad4aa28888c336cbb71e0024652dd4c958c7 HEAD | ForEach-Object {
+            if ($_ -notlike 'tests/windows-feasibility/*' -and $_ -ne '.github/workflows/checkpoint2-ntfs-feasibility.yml') { throw "Out-of-scope file: $_" }
+          }
+          cmake -S tests/windows-feasibility -B "$env:RUNNER_TEMP/cp2-build" -A x64
+          if ($LASTEXITCODE) { throw 'Configure failed' }
+          cmake --build "$env:RUNNER_TEMP/cp2-build" --config Release
+          if ($LASTEXITCODE) { throw 'Build failed' }
+      - name: Run only disposable native NTFS experiments
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:CP2_EVIDENCE = "$env:RUNNER_TEMP/cp2-evidence"
+          New-Item -ItemType Directory -Path $env:CP2_EVIDENCE | Out-Null
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber |
+            ConvertTo-Json | Set-Content "$env:CP2_EVIDENCE/environment.json"
+          git rev-parse HEAD | Set-Content "$env:CP2_EVIDENCE/source.txt"
+          & "$env:RUNNER_TEMP/cp2-build/Release/ntfs-feasibility.exe" 2>&1 |
+            Tee-Object "$env:CP2_EVIDENCE/results.txt"
+          if ($LASTEXITCODE) { throw 'Native feasibility test failed; no installer may proceed' }
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: Checkpoint2-NTFS-feasibility-evidence
+          path: ${{ runner.temp }}/cp2-evidence
+          if-no-files-found: warn
