@@ -128,14 +128,16 @@ void staticChecks() {
   mutationGuard(root + L"\\symlink");
   require(CreateSymbolicLinkW((root + L"\\symlink").c_str(), (canary + L"\\outside.txt").c_str(),
     SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != 0, "symlink fixture unavailable");
-  Chain chain(root);
-  refuse([&] { auto link = child(chain.leaf(), L"symlink", false, FILE_READ_DATA | DELETE); });
   mutationGuard(root + L"\\hardlink");
   require(CreateHardLinkW((root + L"\\hardlink").c_str(), (canary + L"\\outside.txt").c_str(), nullptr) != 0, "hardlink fixture failed");
+  seed(root + L"\\modified", "user changed bytes");
+  // Prepare every fixture before acquiring strict directory capabilities:
+  // CreateHardLink itself needs a destination-directory internal write open.
+  Chain chain(root);
+  refuse([&] { auto link = child(chain.leaf(), L"symlink", false, FILE_READ_DATA | DELETE); });
   auto linked = child(chain.leaf(), L"hardlink", false, FILE_READ_DATA | DELETE);
   require(info(linked.h).nNumberOfLinks == 2, "wrong hardlink count");
   refuse([&] { verify(linked.h, expected("external disposable canary")); });
-  seed(root + L"\\modified", "user changed bytes");
   auto modified = child(chain.leaf(), L"modified", false, FILE_READ_DATA | DELETE);
   refuse([&] { verify(modified.h, expected("owned original")); });
   require(hash(read(modified.h)) == expected("user changed bytes").sha, "modified bytes changed");
