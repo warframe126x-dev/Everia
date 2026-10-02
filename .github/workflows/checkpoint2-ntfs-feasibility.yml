@@ -38,9 +38,9 @@ jobs:
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber |
             ConvertTo-Json | Set-Content "$env:CP2_EVIDENCE/environment.json"
           git rev-parse HEAD | Set-Content "$env:CP2_EVIDENCE/source.txt"
-          & "$env:RUNNER_TEMP/cp2-build/Release/rename-review.exe" 2>&1 |
+          & "$env:RUNNER_TEMP/cp2-build/Release/create-review.exe" 2>&1 |
             Tee-Object "$env:CP2_EVIDENCE/results.txt"
-          if ($LASTEXITCODE) { throw 'No safe rename model demonstrated; no installer may proceed' }
+          if ($LASTEXITCODE) { throw 'Create-only confinement not proven; production remains stopped' }
       - uses: actions/upload-artifact@v6
         if: always()
         with:

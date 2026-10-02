@@ -85,3 +85,24 @@ hard-link, modified/unknown sentinel and outside-root checks remain mandatory.
 
 The directory write-access probe is diagnostic only, never a mutation capability.
 No candidate is production-approved merely by a successful isolated rename.
+
+## Create-only confinement experiment (tests only)
+
+`create-review.cpp` replaces the workflow's executed test entry point. Prior rename
+experiments remain preserved and compiled; their retired mutation models are not
+executed. No installer, registry, shortcut, cleanup, legacy conversion or profile
+operation occurs. Native `FILE_CREATE` placement is tested under retained handles,
+with and without `OBJ_DONT_REPARSE` and leaf no-follow. Every forced conversion
+occurs on an empty directory. Four mutable levels have deterministic tests and
+fresh-empty sustained race rounds. The read-only intermediate-junction diagnostic
+intentionally accepts a multi-component name solely to measure parsing behavior;
+the creation surface accepts only validated single components.
+
+Canary inventories include directories, file sizes and SHA-256 values, and are
+compared after every scenario/race round. Returned handles are checked against the
+authorized creation root before writing. An escaped create is itself a failure,
+even if no payload bytes were written. Evidence is retained even on failure.
+The partial-population subprocess exits immediately after flushing one new file;
+no commit/promotion or rollback cleanup is implemented. Prototype path input is
+intentionally limited to bounded ASCII local NTFS paths; broader production path
+support is not established by this experiment.
