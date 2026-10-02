@@ -33,7 +33,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $env:CP2_EVIDENCE = "$env:RUNNER_TEMP/cp2-evidence"
+          $env:CP2_EVIDENCE = Join-Path $env:RUNNER_TEMP 'cp2-evidence'
           New-Item -ItemType Directory -Path $env:CP2_EVIDENCE | Out-Null
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber |
             ConvertTo-Json | Set-Content "$env:CP2_EVIDENCE/environment.json"
