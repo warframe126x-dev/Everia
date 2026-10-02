@@ -242,6 +242,33 @@ void sustained(unsigned level) {
   std::cout << "RACE level=" << level << " fresh-empty-rounds=64 attempts=" << totalAttempts << " conversions=" << conversions << " resets=" << clears
     << " ancestor-renames=" << parentMoves << " created=" << successfulCreates << " refused=" << refusals << std::endl; ++passedCases;
 }
+void deterministicReplacement() {
+  const auto before = inventory(canary); saveInventory(before, "ancestor-replacement-before.txt");
+  auto p = fresh(L"replacement"); Chain chain(p); std::vector<Handle> held; std::vector<std::wstring> paths{p};
+  for (const auto* part : {L"Everia", L"Versions", L"build-unique"}) {
+    auto parent = held.empty() ? chain.leaf() : held.back().h; p += L"\\" + std::wstring(part);
+    held.push_back(mustCreate(parent, part, true, p)); paths.push_back(p);
+  }
+  // Creation is paused after capability validation. Attempt replacement of EACH
+  // retained directory, then resume creation using the same capabilities.
+  for (size_t n = 0; n < paths.size(); ++n) {
+    const auto h = n == 0 ? chain.leaf() : held[n - 1].h; const auto original = rawInfo(h);
+    const auto moved = paths[n] + L"-replacement"; mutationGuard(moved);
+    const auto movedOk = MoveFileExW(paths[n].c_str(), moved.c_str(), 0);
+    const auto error = movedOk ? 0 : GetLastError();
+    require(!movedOk && sameId(original, rawInfo(h)), "retained ancestor was replaced");
+    std::cout << "DETERMINISTIC_REPLACEMENT level=" << n << " rename-win32=" << error << " identity-unchanged=true" << std::endl;
+  }
+  auto file = mustCreate(held.back().h, L"payload", false, p + L"\\payload"); writeNew(file.h, bytes("post-replacement verified payload"));
+  compareCanary(before, "ancestor-replacement"); ++passedCases;
+  // Existing EMPTY generation collision must refuse too: no occupancy/marker is
+  // allowed to become the reason for rejecting an existing generation name.
+  auto q = fresh(L"empty-generation-collision"); makeDir(q + L"\\build-unique"); Chain parent(q); Handle out;
+  const auto status = relativeCreate(parent.leaf(), L"BUILD-UNIQUE", true, guarded, out, q + L"\\BUILD-UNIQUE");
+  require(status < 0, "empty existing generation was adopted");
+  std::cout << "EMPTY_GENERATION_COLLISION ntstatus=0x" << std::hex << static_cast<unsigned long>(status) << std::dec << std::endl;
+  compareCanary(before, "empty-generation-collision"); ++passedCases;
+}
 void fileAuthority() {
   auto p = fresh(L"file-authority"); Chain chain(p); auto f = mustCreate(chain.leaf(), L"payload", false, p + L"\\payload");
   const auto id = rawInfo(f.h); const auto before = inventory(canary); saveInventory(before, "file-authority-before.txt");
@@ -258,11 +285,12 @@ void fileAuthority() {
       ++attempts;
     }
   });
+  while (attempts < 16) std::this_thread::yield();
   std::string failure;
   try { for (unsigned n = 0; n < 32; ++n) { LARGE_INTEGER zero{}; require(SetFilePointerEx(f.h, zero, nullptr, FILE_BEGIN) != 0, "seek"); writeNew(f.h, bytes("retained file payload")); } }
   catch (const std::exception& e) { failure = e.what(); }
   stop = true; attacker.join(); compareCanary(before, "file-authority"); require(failure.empty(), failure.c_str());
-  require(sameId(id, rawInfo(f.h)) && rawInfo(f.h).nNumberOfLinks == 1 && read(f.h) == bytes("retained file payload"), "retained file bytes/identity changed");
+  require(sameId(id, rawInfo(f.h)) && !(rawInfo(f.h).dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) && rawInfo(f.h).nNumberOfLinks == 1 && read(f.h) == bytes("retained file payload"), "retained file bytes/identity changed");
   require(moves == 0 && links == 0 && writers == 0 && reparses == 0, "target replacement/aliasing not excluded");
   std::cout << "FILE_AUTHORITY attempts=" << attempts << " moves=" << moves << " aliases=" << links << " writer-opens=" << writers << " reparse=" << reparses << " PASS" << std::endl; ++passedCases;
 }
@@ -323,7 +351,7 @@ int wmain(int argc, wchar_t** argv) {
     for (const auto& model : {guarded, parseOnly, leafOnly}) for (unsigned level = 0; level < 4; ++level)
       for (bool directory : {false, true}) deterministicRoot(model, level, directory);
     for (unsigned level = 0; level < 4; ++level) sustained(level);
-    fileAuthority(); interruption(); compareCanary(initial, "final");
+    deterministicReplacement(); fileAuthority(); interruption(); compareCanary(initial, "final");
     std::cout << "CREATE_ONLY_GATE=PASSED cases=" << passedCases << " no-installer/no-registry/no-cleanup/no-rename" << std::endl; return 0;
   } catch (const std::exception& failure) {
     std::cerr << "CREATE_ONLY_GATE=UNPROVEN_OR_FAILED " << failure.what() << " win32=" << GetLastError() << std::endl; return 1;
