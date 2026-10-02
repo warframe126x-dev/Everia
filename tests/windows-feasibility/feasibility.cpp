@@ -174,8 +174,11 @@ void renameExact(HANDLE file, HANDLE destination, const std::wstring& destinatio
   rename->replace = FALSE; rename->root = destination; rename->length = length;
   memcpy(rename->name, name.data(), length);
   IO_STATUS_BLOCK status{};
-  require(setNt(file, &status, rename, static_cast<ULONG>(buffer.size()), static_cast<FILE_INFORMATION_CLASS>(10)) >= 0,
-    "exact rename refused (collision/lock)");
+  const auto renamed = setNt(file, &status, rename, static_cast<ULONG>(buffer.size()), static_cast<FILE_INFORMATION_CLASS>(10));
+  if (renamed < 0) {
+    std::ostringstream message; message << "exact rename refused NTSTATUS=0x" << std::hex << static_cast<unsigned long>(renamed);
+    throw Refusal(message.str());
+  }
   require(sameId(before, info(file)), "renamed object identity changed"); verify(file, e);
 }
 void removeEmpty(const std::wstring& parent, const std::wstring& name) {
@@ -212,9 +215,9 @@ void refuse(const std::function<void()>& operation) {
   require(refused, "unsafe operation did not refuse");
 }
 // Adversary helpers: target is guarded, canary is a link DESTINATION only.
-void junction(const std::wstring& path, const std::wstring& target) {
+void junction(const std::wstring& path, const std::wstring& target, DWORD access = GENERIC_WRITE) {
   mutationGuard(path); require(target == canary, "wrong adversary destination");
-  Handle h(CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+  Handle h(CreateFileW(path.c_str(), access, 0, nullptr, OPEN_EXISTING,
     FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
   require(h.h != INVALID_HANDLE_VALUE, "junction open failed");
   const auto substitute = L"\\??\\" + target;
@@ -248,6 +251,7 @@ void journalVerify(const Bytes& data, DWORD phase, const Expected& e) {
   require(memcmp(&j, &trusted, sizeof(j)) == 0, "journal not equal to trusted bounded transaction");
 }
 int tests = 0;
+int failures = 0;
 Digest canaryDigest;
 void test(const char* name, const std::function<void()>& body) {
   auto check = [&] {
@@ -256,7 +260,9 @@ void test(const char* name, const std::function<void()>& body) {
     std::cout << "HASH_CHECK canary=" << hex(canaryDigest) << " unknown-sentinels=" << sentinels.size()
       << " unknown-sha256=" << hex(hash(bytes("unrelated sentinel bytes"))) << std::endl;
   };
-  try { body(); } catch (...) { check(); throw; }
+  try { body(); } catch (const Refusal& failure) {
+    check(); ++failures; std::cout << "FAILED_SCENARIO " << name << ": " << failure.what() << std::endl; return;
+  }
   check(); ++tests; std::cout << "PASS " << name << std::endl;
 }
 void experiments() {
@@ -335,13 +341,19 @@ void experiments() {
         if (MoveFileExW((root + L"\\ancestor").c_str(), (root + L"\\ancestor-swapped").c_str(), 0)) ++successes;
         if (CreateHardLinkW((root + L"\\attacker-link").c_str(), (root + L"\\ancestor\\owned").c_str(), nullptr)) ++successes;
         try { junction(root + L"\\ancestor", canary); ++successes; } catch (const Refusal&) {}
+        try { junction(root + L"\\ancestor", canary, FILE_WRITE_ATTRIBUTES); ++successes; } catch (const Refusal&) {}
+        try { junction(root + L"\\ancestor", canary, FILE_WRITE_DATA); ++successes; } catch (const Refusal&) {}
         ++attempts;
       }
     });
     while (!ready || attempts < 1000) std::this_thread::yield();
     bool moved = false;
     try { renameExact(file.h, destination.leaf(), recovery, L"raced-owned", e); moved = true; }
-    catch (...) { stop = true; attacker.join(); throw; }
+    catch (...) {
+      stop = true; attacker.join();
+      std::cout << "RACE attempts=" << attempts << " successful-replacements=" << successes << " authorized-rename=refused" << std::endl;
+      require(successes == 0, "adversary changed a held ancestor or target"); throw;
+    }
     stop = true; attacker.join();
     require(moved && successes == 0 && sameId(id, info(file.h)), "race redirected object or ancestor");
     std::cout << "RACE attempts=" << attempts << " successful-replacements=" << successes << std::endl;
@@ -406,8 +418,8 @@ int wmain() {
     std::wcout << L"DISPOSABLE_ROOT=" << suite << L"\nFILESYSTEM=NTFS DRIVE_TYPE=FIXED\n";
     std::cout << "CANARY_BEFORE=" << hex(canaryDigest) << std::endl;
     experiments();
-    std::cout << "CANARY_AFTER=" << hex(hash(snapshot(canary + L"\\outside.txt"))) << "\nTOTAL=" << tests << std::endl;
-    return 0;
+    std::cout << "CANARY_AFTER=" << hex(hash(snapshot(canary + L"\\outside.txt"))) << "\nPASSED=" << tests << " FAILED=" << failures << std::endl;
+    return failures == 0 ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "FAIL " << error.what() << " last-win32=" << GetLastError() << std::endl; return 1;
   }
