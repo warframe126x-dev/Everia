@@ -57,3 +57,31 @@ worked around by broadening access or changing the invariant.
 
 Passing this harness would establish only feasibility for the exercised mechanisms;
 it is not authorization to implement production maintenance or NSIS integration.
+
+## Bounded rename/sharing review
+
+`rename-review.cpp` reuses the original prototype's primitives but never calls its
+journal/recovery experiment. The workflow now executes only this review. It compares:
+
+* baseline directory list/read-attributes/synchronize, share READ only;
+* destination leaf traverse/read-attributes/synchronize, share READ only;
+* destination leaf list/read-attributes/synchronize, share READ|WRITE (no DELETE).
+
+All preceding destination ancestors remain baseline-locked; the verified source
+file always retains read-data/delete/read-attributes/synchronize, share READ only.
+Source-only access changes are negative isolation controls. The review tries both
+classic native FileRenameInformation (10) and FileRenameInformationEx (65), with
+replacement/POSIX/bypass flags disabled. No retained chain is closed before mutation.
+
+Each adversarial candidate uses a freshly empty destination, so directory contents
+cannot hide a junction-conversion weakness. Adversary write handles use compatible
+READ|WRITE sharing instead of the earlier exclusive share mode. At least 1,000
+passes attempt source-file/source-directory/destination-directory rename, new hard
+links, and junction conversion through generic-write, write-data and attribute-write
+access. Any successful namespace/reparse change rejects the candidate, even if the
+canary bytes survive. A candidate passes only if its ordinary exact move AND its
+adversarial exact move both succeed without those changes. Static junction/symlink,
+hard-link, modified/unknown sentinel and outside-root checks remain mandatory.
+
+The directory write-access probe is diagnostic only, never a mutation capability.
+No candidate is production-approved merely by a successful isolated rename.
