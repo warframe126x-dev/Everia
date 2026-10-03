@@ -221,8 +221,7 @@ void collisions() {
     auto previous = relative(c.leaf(), L"fixed-generation", true, true);
     refused([&] { relative(c.leaf(), L"FIXED-generation", true, true); });
   });
-  for (const auto &kind :
-       {"ordinary", "directory", "symlink", "hardlink", "case"})
+  for (const auto &kind : {"ordinary", "directory", "symlink", "case"})
     test(std::string("payload-collision-") + kind, [&] {
       auto p = fresh();
       auto root = Root::create(p);
@@ -256,6 +255,29 @@ void collisions() {
       });
       refused([&] { root.create_generation(payload); });
     });
+}
+void existing_hardlink() {
+  test("preexisting-hardlinked-payload-refusal", [] {
+    auto p = fresh();
+    auto target = p + L"\\Everia.exe", original = p + L"\\original.txt";
+    put(original, "preexisting unrelated hardlink bytes");
+    guard(target);
+    require(CreateHardLinkW(target.c_str(), original.c_str(), nullptr) != 0,
+            "preexisting hardlink fixture failed");
+    Chain chain(p);
+    refused([&] { relative(chain.leaf(), L"Everia.exe", false, true, true); });
+    refused([&] { relative(chain.leaf(), L"Everia.exe", false, false); });
+    Handle h(CreateFileW(original.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                         nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT,
+                         nullptr));
+    require(h.value != INVALID_HANDLE_VALUE, "hardlink sentinel read");
+    char data[128]{};
+    DWORD count = 0;
+    require(ReadFile(h.value, data, sizeof(data), &count, nullptr) &&
+                std::string(data, count) ==
+                    "preexisting unrelated hardlink bytes",
+            "hardlink sentinel changed");
+  });
 }
 void deterministic() {
   // Test actual production primitive with an EMPTY retained directory at every
@@ -690,6 +712,7 @@ int wmain(int argc, wchar_t **argv) {
       require(std::wstring(argv[2]) == L"fixture", "invalid mode");
       path_tests();
       collisions();
+      existing_hardlink();
       deterministic();
       races();
       states();
