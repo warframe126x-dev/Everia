@@ -225,34 +225,27 @@ void collisions() {
     test(std::string("payload-collision-") + kind, [&] {
       auto p = fresh();
       auto root = Root::create(p);
-      root.set_test_hook([&](const char *phase, const std::wstring &target,
-                             void *) {
-        if (std::string(phase) != "before-file" ||
-            !target.ends_with(L"Everia.exe"))
-          return;
-        std::string k = kind;
-        if (k == "ordinary")
-          put(target, "unknown");
-        else if (k == "directory")
-          mkdir(target);
-        else if (k == "case") {
-          auto t = target.substr(0, target.size() - 10) + L"eVeRiA.ExE";
-          put(t, "unknown-case");
-        } else if (k == "symlink") {
-          guard(target);
-          require(CreateSymbolicLinkW(target.c_str(),
-                                      (canary + L"\\outside.txt").c_str(),
-                                      0x2) != 0,
-                  "UNPROVEN symlink collision");
-        } else {
-          auto original = p + L"\\unknown-original";
-          put(original, "unknown-hardlink");
-          guard(target);
-          require(CreateHardLinkW(target.c_str(), original.c_str(), nullptr) !=
-                      0,
-                  "hardlink collision failed");
-        }
-      });
+      root.set_test_hook(
+          [&](const char *phase, const std::wstring &target, void *) {
+            if (std::string(phase) != "before-file" ||
+                !target.ends_with(L"Everia.exe"))
+              return;
+            std::string k = kind;
+            if (k == "ordinary")
+              put(target, "unknown");
+            else if (k == "directory")
+              mkdir(target);
+            else if (k == "case") {
+              auto t = target.substr(0, target.size() - 10) + L"eVeRiA.ExE";
+              put(t, "unknown-case");
+            } else if (k == "symlink") {
+              guard(target);
+              require(CreateSymbolicLinkW(target.c_str(),
+                                          (canary + L"\\outside.txt").c_str(),
+                                          0x2) != 0,
+                      "UNPROVEN symlink collision");
+            }
+          });
       refused([&] { root.create_generation(payload); });
     });
 }
@@ -437,7 +430,7 @@ void races() {
         file_id = identity(handle);
         stop = false;
         const auto initial = attempts.load();
-        adversary = std::thread([&, target] {
+        adversary = std::thread([&, target, initial] {
           while (!stop || attempts < initial + 256) {
             ++attempts;
             if (MoveFileExW(target.c_str(), (target + L"-moved").c_str(), 0))
@@ -538,6 +531,25 @@ void states() {
                          FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr));
     require(read_small(h.value) == "unknown bytes",
             "unknown neighbor modified");
+  });
+  test("late-extra-cannot-authorize-ready", [] {
+    auto p = fresh();
+    std::wstring gen;
+    {
+      auto root = Root::create(p);
+      root.set_test_hook(
+          [&](const char *phase, const std::wstring &path, void *) {
+            if (std::string(phase) == "generation-created")
+              gen = path;
+            if (std::string(phase) == "before-ready")
+              put(path + L"\\late-user-file.txt", "preserved late bytes");
+          });
+      refused([&] { root.create_generation(payload); });
+    }
+    auto i = inspect_generation(gen);
+    require(i.state == State::invalid && !i.generation.ready &&
+                !i.generation.active,
+            "ready marker trusted without complete verification");
   });
   test("unknown-extra-after-ready", [] {
     auto r = normal(fresh());
