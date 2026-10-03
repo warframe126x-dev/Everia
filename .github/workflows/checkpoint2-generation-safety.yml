@@ -75,7 +75,7 @@ jobs:
           $out = Join-Path $env:CP2_EVIDENCE 'actual'
           New-Item -ItemType Directory $out | Out-Null
           $env:CP2_EVIDENCE = $out
-          & "$env:RUNNER_TEMP/actual-build/Release/generation-tests.exe" "$env:RUNNER_TEMP/payload" actual 2>&1 | Tee-Object "$out/native-results.txt"
+          & "$env:RUNNER_TEMP/actual-build/Release/generation-tests.exe" (Join-Path $env:RUNNER_TEMP 'payload') actual 2>&1 | Tee-Object "$out/native-results.txt"
           if ($LASTEXITCODE) { throw 'Actual payload generation failed' }
       - name: Compile synthetic fixture variant of identical production source
         run: |
@@ -91,7 +91,7 @@ jobs:
           $out = Join-Path $env:CP2_EVIDENCE 'adversarial'
           New-Item -ItemType Directory $out | Out-Null
           $env:CP2_EVIDENCE = $out
-          & "$env:RUNNER_TEMP/fixture-build/Release/generation-tests.exe" "$env:RUNNER_TEMP/fixture-payload" fixture 2>&1 | Tee-Object "$out/native-results.txt"
+          & "$env:RUNNER_TEMP/fixture-build/Release/generation-tests.exe" (Join-Path $env:RUNNER_TEMP 'fixture-payload') fixture 2>&1 | Tee-Object "$out/native-results.txt"
           if ($LASTEXITCODE) { throw 'Production safety gate failed or unproven' }
       - name: Upload safety evidence only (no application, helper executable or installer)
         if: always()

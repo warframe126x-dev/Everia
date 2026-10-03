@@ -1,5 +1,5 @@
 #include "internal.hpp"
 namespace everia::generation::detail {
 #include "payload_inventory.hpp"
-const Inventory& trusted_inventory() { return embedded_inventory(); }
-}
+const Inventory &trusted_inventory() { return embedded_inventory(); }
+} // namespace everia::generation::detail
