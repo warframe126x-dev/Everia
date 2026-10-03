@@ -1,12 +1,13 @@
 #pragma once
 #include "generation.hpp"
+#include <windows.h>
+#include <winternl.h>
+
 #include <array>
 #include <bcrypt.h>
 #include <map>
 #include <set>
 #include <vector>
-#include <windows.h>
-#include <winternl.h>
 namespace everia::generation::detail {
 using Bytes = std::vector<unsigned char>;
 constexpr ULONG existing = 1, exclusive_create = 2, directory = 1, sync = 0x20,

@@ -92,7 +92,12 @@ void canary_check(const std::string &name) {
 }
 void test(const std::string &name, const std::function<void()> &fn) {
   save(name + "-canary-before.txt", snapshot(canary));
-  fn();
+  try {
+    fn();
+  } catch (...) {
+    canary_check(name + "-failed");
+    throw;
+  }
   canary_check(name);
   ++passed;
   std::cout << "PASS " << name << std::endl;
