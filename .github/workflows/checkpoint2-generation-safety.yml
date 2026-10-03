@@ -1,0 +1,103 @@
+name: Checkpoint 2 production generation safety
+on:
+  push:
+    branches: [checkpoint2/safe-generation-engine]
+    paths:
+      - native/generation/**
+      - tools/generation/**
+      - tests/generation/**
+      - .github/workflows/checkpoint2-generation-safety.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-safety:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      BASELINE: 5426ad4aa28888c336cbb71e0024652dd4c958c7
+      STABLE: fd98cfa3f79c10cebcf757f22a52e98d0f547e93
+      PROTOTYPE: 60209d18b2923424c26a08bccb7f155da6b9bb17
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verify source boundary and fixed refs
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne '${{ github.sha }}') { throw 'Checkout mismatch' }
+          if ((git rev-parse origin/main) -ne $env:STABLE) { throw 'main moved' }
+          if ((git cat-file -t v0.9) -ne 'tag' -or (git rev-parse 'v0.9^{commit}') -ne $env:STABLE) { throw 'v0.9 moved/type mismatch' }
+          if ((git rev-parse origin/v1.0) -ne $env:BASELINE) { throw 'v1.0 moved' }
+          git cat-file -e "$env:PROTOTYPE^{commit}"
+          if ($LASTEXITCODE) { throw 'Prototype evidence missing' }
+          git merge-base --is-ancestor $env:BASELINE HEAD
+          if ($LASTEXITCODE) { throw 'Wrong implementation lineage' }
+          $changed = git diff --name-only $env:BASELINE HEAD
+          foreach ($path in $changed) {
+            if ($path -notmatch '^(native/generation/|tools/generation/|tests/generation/|docs/checkpoint2-generation-engine.md$|\.github/workflows/checkpoint2-generation-safety.yml$)') { throw "Forbidden source change: $path" }
+          }
+          if (git status --porcelain) { throw 'Dirty checkout' }
+          git diff --check $env:BASELINE HEAD
+          if ($LASTEXITCODE) { throw 'Whitespace check failed' }
+          $evidence = Join-Path $env:RUNNER_TEMP 'cp2-evidence'
+          New-Item -ItemType Directory $evidence | Out-Null
+          "CP2_EVIDENCE=$evidence" >> $env:GITHUB_ENV
+          git rev-parse HEAD | Set-Content "$evidence/helper-source.txt"
+          Get-ComputerInfo -Property WindowsProductName,WindowsVersion,OsName,OsVersion | Format-List | Out-File "$evidence/environment.txt"
+          Get-Volume | Format-Table DriveLetter,FileSystem,DriveType | Out-File "$evidence/volumes.txt"
+      - name: Inventory unit tests
+        run: |
+          python tests/generation/inventory_test.py
+          if ($LASTEXITCODE) { throw 'Inventory tests failed' }
+      - name: Recover immutable already-distributed portable payload (never execute)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'original-portable-artifact.zip'
+          Invoke-WebRequest -Uri 'https://api.github.com/repos/warframe126x-dev/Everia/actions/artifacts/11092205934/zip' -Headers @{ Authorization="Bearer $env:GH_TOKEN"; Accept='application/vnd.github+json' } -OutFile $archive
+          python tools/generation/recover_payload.py --artifact $archive --destination "$env:RUNNER_TEMP/payload" --evidence "$env:CP2_EVIDENCE/payload-provenance.json"
+          if ($LASTEXITCODE) { throw 'Original payload recovery failed' }
+      - name: Compile actual-payload production library and test surface
+        run: |
+          cmake -S native/generation -B "$env:RUNNER_TEMP/actual-build" -A x64 -DEVERIA_GENERATION_TESTS=ON "-DEVERIA_PAYLOAD_DIR=$env:RUNNER_TEMP/payload" "-DEVERIA_SOURCE_SHA=$env:BASELINE" -DEVERIA_BUILD_ID=portable-36705033196 -DEVERIA_ARCHIVE_SHA=d47a17e91d0e4ec608c513cc00ce4c56162f1a84999f74e165d072146ed7a49c
+          if ($LASTEXITCODE) { throw 'Production configure failed' }
+          cmake --build "$env:RUNNER_TEMP/actual-build" --config Release
+          if ($LASTEXITCODE) { throw 'Production compile failed' }
+          Copy-Item "$env:RUNNER_TEMP/actual-build/generated/payload-inventory.json" "$env:CP2_EVIDENCE/actual-payload-inventory.json"
+      - name: Actual packaged payload generation and read-only verification (never launch)
+        run: |
+          $out = Join-Path $env:CP2_EVIDENCE 'actual'
+          New-Item -ItemType Directory $out | Out-Null
+          $env:CP2_EVIDENCE = $out
+          & "$env:RUNNER_TEMP/actual-build/Release/generation-tests.exe" "$env:RUNNER_TEMP/payload" actual 2>&1 | Tee-Object "$out/native-results.txt"
+          if ($LASTEXITCODE) { throw 'Actual payload generation failed' }
+      - name: Compile synthetic fixture variant of identical production source
+        run: |
+          python tools/generation/fixture.py "$env:RUNNER_TEMP/fixture-payload"
+          if ($LASTEXITCODE) { throw 'Fixture creation failed' }
+          cmake -S native/generation -B "$env:RUNNER_TEMP/fixture-build" -A x64 -DEVERIA_GENERATION_TESTS=ON "-DEVERIA_PAYLOAD_DIR=$env:RUNNER_TEMP/fixture-payload" "-DEVERIA_SOURCE_SHA=$env:BASELINE" -DEVERIA_BUILD_ID=synthetic-test-only -DEVERIA_ARCHIVE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          if ($LASTEXITCODE) { throw 'Fixture configure failed' }
+          cmake --build "$env:RUNNER_TEMP/fixture-build" --config Release
+          if ($LASTEXITCODE) { throw 'Fixture compile failed' }
+          Copy-Item "$env:RUNNER_TEMP/fixture-build/generated/payload-inventory.json" "$env:CP2_EVIDENCE/fixture-payload-inventory.json"
+      - name: Deterministic and concurrent production-engine adversarial tests
+        run: |
+          $out = Join-Path $env:CP2_EVIDENCE 'adversarial'
+          New-Item -ItemType Directory $out | Out-Null
+          $env:CP2_EVIDENCE = $out
+          & "$env:RUNNER_TEMP/fixture-build/Release/generation-tests.exe" "$env:RUNNER_TEMP/fixture-payload" fixture 2>&1 | Tee-Object "$out/native-results.txt"
+          if ($LASTEXITCODE) { throw 'Production safety gate failed or unproven' }
+      - name: Upload safety evidence only (no application, helper executable or installer)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checkpoint2-generation-safety-evidence
+          path: ${{ runner.temp }}/cp2-evidence
+          if-no-files-found: error
+          retention-days: 90
