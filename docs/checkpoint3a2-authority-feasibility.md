@@ -24,13 +24,21 @@ reads the protected record, pins and verifies filesystem evidence, then creates
 only a new second generation. This token is not claimed to be an actual standard
 account, SYSTEM context or a Windows UAC-linked filtered token.
 
-The first bounded run measures this prerequisite, owner/DACL integrity,
-denied rights, malformed/substituted/copied receipts and byte-preserved canaries.
+The bounded runs measure this prerequisite, owner/DACL integrity,
+denied rights, malformed/substituted/copied receipts, 32-bit/HKCU lookalikes,
+an explicit registry-link fixture, anchor modification, forced publication
+interruptions, per-user Known Folder and explicit all-users scope, and
+byte-preserved canaries. All-users fixtures remain in the disposable temporary
+root; no real Program Files directory, application registration or shortcut is
+used. The per-user fixture is a unique disposable child of UserProgramFiles;
+this is a test-only exact Known Folder exception, not a production AppData change.
 It also runs the unchanged CP2 fixture safety suite. Regardless of green subset
-results, the full gate remains UNPROVEN until actual required token contexts,
-registry links/views and ancestors, forced publication interruptions, owning-user
-Known Folder destination, complete read-only anchor lifetime and all registry
-canary inventories are exercised. No production integration follows this run.
+results, the full gate remains UNPROVEN until actual required token contexts and
+durable-recognition-specific synchronized filesystem attacks are exercised.
+The unchanged CP2 suite is relevant confinement regression evidence, not a
+replacement for those combined ledger/reopen attacks. No production integration
+follows this run. The host's elevation type and linked-token availability are
+recorded explicitly; a synthetic token must not be mislabeled as UAC evidence.
 
 Prototype code is deliberately not a callable production authorizer. A random
 namespace is only a disposable-test guard, not an application trust anchor.
