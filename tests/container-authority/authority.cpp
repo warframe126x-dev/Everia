@@ -47,7 +47,9 @@ Handle token(DWORD access=TOKEN_QUERY) {
   HANDLE h{}; check(OpenProcessToken(GetCurrentProcess(), access, &h) != 0, "process-token"); return Handle(h);
 }
 Handle restricted() {
-  auto t = token(TOKEN_QUERY|TOKEN_DUPLICATE);
+  // Returned restricted-token handle inherits the original handle's granted
+  // access. Child launch needs ASSIGN_PRIMARY/DUPLICATE; readers need QUERY only.
+  auto t = token(TOKEN_ALL_ACCESS);
   DWORD n=0; GetTokenInformation(t.value, TokenGroups, nullptr, 0, &n);
   Bytes b(n); check(GetTokenInformation(t.value, TokenGroups, b.data(), n, &n) != 0, "token-groups");
   auto* groups = reinterpret_cast<TOKEN_GROUPS*>(b.data());
@@ -286,9 +288,9 @@ int wmain(int argc,wchar_t** argv) {
     });
     test("modified anchor fails recognition",[&]{
       auto fields=unpack(original); Chain root(widen(fields[6])); auto versions=relative(root.leaf(),L"Versions",true,false); auto anchor=relative(versions.value,L"anchor",true,false);
-      { auto leaf=relative(anchor.value,L"payload.txt",false,false,true); write_small(leaf.value,"modified fixture"); }
+      { auto leaf=relative(anchor.value,L"payload.txt",false,false,true); LARGE_INTEGER zero{}; check(SetFilePointerEx(leaf.value,zero,nullptr,FILE_BEGIN) && SetEndOfFile(leaf.value),"tamper-fixture-truncate"); write_small(leaf.value,"modified fixture"); }
       refusal([&]{recognize(ns,false,"user",sid);});
-      { auto leaf=relative(anchor.value,L"payload.txt",false,false,true); write_small(leaf.value,payload); }
+      { auto leaf=relative(anchor.value,L"payload.txt",false,false,true); LARGE_INTEGER zero{}; check(SetFilePointerEx(leaf.value,zero,nullptr,FILE_BEGIN) && SetEndOfFile(leaf.value),"restore-fixture-truncate"); write_small(leaf.value,payload); }
     });
     test("hard-linked anchor refuses without mutating alias",[&]{auto fields=unpack(original); const auto source=widen(fields[6])+L"\\Versions\\anchor\\payload.txt"; const auto alias=base+L"\\alias.txt"; check(CreateHardLinkW(alias.c_str(),source.c_str(),nullptr)!=0,"hardlink-fixture"); refusal([&]{recognize(ns,false,"user",sid);}); check(DeleteFileW(alias.c_str())!=0,"remove-disposable-alias");});
     test("wrong owner refused",[&]{
