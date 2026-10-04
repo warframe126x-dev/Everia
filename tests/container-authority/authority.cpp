@@ -1,6 +1,7 @@
 // Isolated feasibility surface. Not a publisher or maintenance API for shipping.
 #include "internal.hpp"
 #include <sddl.h>
+#include <aclapi.h>
 #include <shlobj.h>
 #include <algorithm>
 #include <cstring>
@@ -148,6 +149,7 @@ void populate(HANDLE generation) {
 }
 void publish(const std::wstring& ns, const std::wstring& parent, const std::string& scope, const std::wstring& intended) {
   auto t=token(); check((scope=="machine" && intended.empty()) || (scope=="user" && sid_of(t.value)==intended),"elevation-sid-refused");
+  std::cout<<"PUBLISHER_PROCESS pid="<<GetCurrentProcessId()<<" scope="<<scope<<" sid="<<narrow(sid_of(t.value))<<std::endl;
   publication_barrier(ns,0);
   Key authority; pinned_authority(ns,authority);
   Key writable; open_key(writable,ns+L"\\Authority",KEY_READ|KEY_SET_VALUE);
@@ -219,7 +221,7 @@ int wmain(int argc,wchar_t** argv) {
   try {
     check(argc>=2,"arguments"); const std::wstring mode=argv[1];
     if(mode==L"publish") { check(argc==6 || argc==7,"publish-args"); if(argc==7) interrupt_phase=std::stoi(argv[6]); publish(argv[2],argv[3],narrow(argv[4]),argv[5]); return 0; }
-    if(mode==L"read") { check(argc==6,"read-args"); recognize(argv[2],std::wstring(argv[3])==L"add",narrow(argv[4]),argv[5]); return 0; }
+    if(mode==L"read") { check(argc==6,"read-args"); if(std::wstring(argv[4])==L"user") { Key probe; const auto result=RegOpenKeyExW(HKEY_LOCAL_MACHINE,(std::wstring(argv[2])+L"\\Authority").c_str(),0,KEY_SET_VALUE|KEY_WOW64_64KEY,&probe.h); check(result==ERROR_ACCESS_DENIED,"fresh-reader-not-reduced"); std::cout<<"READER_PROCESS pid="<<GetCurrentProcessId()<<" primary-token-write-denied="<<result<<std::endl; } recognize(argv[2],std::wstring(argv[3])==L"add",narrow(argv[4]),argv[5]); return 0; }
     check(mode==L"suite" && argc==4,"suite-args");
     const std::wstring ns=argv[2], base=argv[3]; validate_namespace(ns);
     check(fs::path(base).filename().wstring().starts_with(L"cp3a2-"),"disposable-root-required");
@@ -292,14 +294,14 @@ int wmain(int argc,wchar_t** argv) {
       refusal([&]{recognize(ns,false,"user",sid);});
       { auto leaf=relative(anchor.value,L"payload.txt",false,false,true); LARGE_INTEGER zero{}; check(SetFilePointerEx(leaf.value,zero,nullptr,FILE_BEGIN) && SetEndOfFile(leaf.value),"restore-fixture-truncate"); write_small(leaf.value,payload); }
     });
-    test("hard-linked anchor refuses without mutating alias",[&]{auto fields=unpack(original); const auto source=widen(fields[6])+L"\\Versions\\anchor\\payload.txt"; const auto alias=base+L"\\alias.txt"; check(CreateHardLinkW(alias.c_str(),source.c_str(),nullptr)!=0,"hardlink-fixture"); refusal([&]{recognize(ns,false,"user",sid);}); check(DeleteFileW(alias.c_str())!=0,"remove-disposable-alias");});
+    test("hard-linked anchor refuses without mutating alias",[&]{auto fields=unpack(original); const auto source=widen(fields[6])+L"\\Versions\\anchor\\payload.txt"; auto parent=relative(base_chain.leaf(),L"hardlink-fixture",true,true); const auto alias=canonical(parent.value)+L"\\alias.txt"; parent=Handle(); const auto linked=CreateHardLinkW(alias.c_str(),source.c_str(),nullptr); if(!linked) std::cout<<"HARDLINK_FIXTURE_ERROR "<<GetLastError()<<std::endl; check(linked!=0,"hardlink-fixture"); refusal([&]{recognize(ns,false,"user",sid);}); check(DeleteFileW(alias.c_str())!=0,"remove-disposable-alias");});
     test("wrong owner refused",[&]{
       PSECURITY_DESCRIPTOR weak{}; check(ConvertStringSecurityDescriptorToSecurityDescriptorW((L"O:"+sid+L"D:P(A;;KA;;;BA)(A;;KR;;;AU)").c_str(),SDDL_REVISION_1,&weak,nullptr)!=0,"weak-sddl");
       check(RegSetKeySecurity(authority.h,OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,weak)==ERROR_SUCCESS,"weak-fixture"); LocalFree(weak);
       refusal([&]{recognize(ns,false,"user",sid);}); SD good; check(RegSetKeySecurity(authority.h,OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,good.p)==ERROR_SUCCESS,"restore-fixture");
     });
     test("permissive DACL refused",[&]{PSECURITY_DESCRIPTOR weak{}; check(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAD:P(A;;KA;;;BA)(A;;KA;;;AU)",SDDL_REVISION_1,&weak,nullptr)!=0,"weak-sddl"); check(RegSetKeySecurity(authority.h,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,weak)==ERROR_SUCCESS,"weak-fixture"); LocalFree(weak); refusal([&]{recognize(ns,false,"user",sid);}); SD good; check(RegSetKeySecurity(authority.h,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,good.p)==ERROR_SUCCESS,"restore-fixture");});
-    test("unprotected inherited DACL refused",[&]{SD security; check(RegSetKeySecurity(authority.h,DACL_SECURITY_INFORMATION|UNPROTECTED_DACL_SECURITY_INFORMATION,security.p)==ERROR_SUCCESS,"inherited-fixture"); refusal([&]{recognize(ns,false,"user",sid);}); check(RegSetKeySecurity(authority.h,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,security.p)==ERROR_SUCCESS,"restore-fixture");});
+    test("unprotected inherited DACL refused",[&]{SD security; PACL acl{}; BOOL present{},defaulted{}; check(GetSecurityDescriptorDacl(security.p,&present,&acl,&defaulted) && present && acl,"fixture-dacl"); check(SetSecurityInfo(authority.h,SE_REGISTRY_KEY,DACL_SECURITY_INFORMATION|UNPROTECTED_DACL_SECURITY_INFORMATION,nullptr,nullptr,acl,nullptr)==ERROR_SUCCESS,"inherited-fixture"); refusal([&]{recognize(ns,false,"user",sid);}); SD good; check(GetSecurityDescriptorDacl(good.p,&present,&acl,&defaulted) && present && acl,"fixture-dacl"); check(SetSecurityInfo(authority.h,SE_REGISTRY_KEY,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,nullptr,nullptr,acl,nullptr)==ERROR_SUCCESS,"restore-fixture");});
     test("weak authority ancestor refused without repair",[&]{PSECURITY_DESCRIPTOR weak{}; check(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAD:P(A;;KA;;;BA)(A;;KA;;;AU)",SDDL_REVISION_1,&weak,nullptr)!=0,"weak-sddl"); check(RegSetKeySecurity(suite.h,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,weak)==ERROR_SUCCESS,"weak-fixture"); LocalFree(weak); refusal([&]{recognize(ns,false,"user",sid);}); SD good; check(RegSetKeySecurity(suite.h,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,good.p)==ERROR_SUCCESS,"restore-fixture");});
     for(int phase=0;phase<5;++phase) {
       test(("forced publication interruption phase "+std::to_string(phase)).c_str(),[&]{
