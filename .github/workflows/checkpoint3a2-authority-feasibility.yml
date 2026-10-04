@@ -1,0 +1,81 @@
+name: Checkpoint 3A.2 disposable authority feasibility
+on:
+  push:
+    branches: [qa/checkpoint3a2-container-authority]
+    paths:
+      - tests/container-authority/**
+      - .github/workflows/checkpoint3a2-authority-feasibility.yml
+      - docs/checkpoint3a2-authority-feasibility.md
+permissions:
+  contents: read
+jobs:
+  authority-experiment:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verify immutable production boundary
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne '${{ github.sha }}') { throw 'Wrong exact source' }
+          if ((git rev-parse origin/main) -ne 'fd98cfa3f79c10cebcf757f22a52e98d0f547e93') { throw 'main moved' }
+          if ((git cat-file -t v0.9) -ne 'tag' -or (git rev-parse 'v0.9^{commit}') -ne 'fd98cfa3f79c10cebcf757f22a52e98d0f547e93') { throw 'stable tag moved/type mismatch' }
+          if ((git rev-parse origin/v1.0) -ne '5426ad4aa28888c336cbb71e0024652dd4c958c7') { throw 'v1.0 moved' }
+          git merge-base --is-ancestor c79b0d26044f0fd057496f62a6cfe443da5b98ff HEAD
+          if ($LASTEXITCODE) { throw 'Wrong CP2 parent' }
+          foreach ($path in (git diff --name-only c79b0d26044f0fd057496f62a6cfe443da5b98ff HEAD)) {
+            if ($path -notmatch '^(tests/container-authority/|docs/checkpoint3a2-authority-feasibility.md$|\.github/workflows/checkpoint3a2-authority-feasibility.yml$)') { throw "Production change: $path" }
+          }
+          git diff --check c79b0d26044f0fd057496f62a6cfe443da5b98ff HEAD
+          if ($LASTEXITCODE -or (git status --porcelain)) { throw 'Dirty/invalid source' }
+          $evidence = Join-Path $env:RUNNER_TEMP 'cp3a2-evidence'
+          New-Item -ItemType Directory $evidence | Out-Null
+          "EVIDENCE=$evidence" >> $env:GITHUB_ENV
+          git rev-parse HEAD | Set-Content "$evidence/source.txt"
+          Get-ComputerInfo -Property OsName,OsVersion,WindowsVersion | Format-List | Out-File "$evidence/environment.txt"
+          Get-Volume | Format-Table DriveLetter,FileSystem,DriveType | Out-File "$evidence/volumes.txt"
+          whoami /all | Out-File "$evidence/publisher-token.txt"
+      - name: Compile disposable native prototype with unchanged CP2 source
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/generation/fixture.py "$env:RUNNER_TEMP/cp3a2-fixture"
+          if ($LASTEXITCODE) { throw 'Fixture creation failed' }
+          cmake -S tests/container-authority -B "$env:RUNNER_TEMP/cp3a2-build" -A x64 -DEVERIA_GENERATION_TESTS=ON "-DEVERIA_PAYLOAD_DIR=$env:RUNNER_TEMP/cp3a2-fixture" -DEVERIA_SOURCE_SHA=c79b0d26044f0fd057496f62a6cfe443da5b98ff -DEVERIA_BUILD_ID=authority-test-only -DEVERIA_ARCHIVE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          if ($LASTEXITCODE) { throw 'Configure failed' }
+          cmake --build "$env:RUNNER_TEMP/cp3a2-build" --config Release
+          if ($LASTEXITCODE) { throw 'Compile failed' }
+      - name: Protected HKLM64 publication and cross-process reduced-token recognition
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nonce = [guid]::NewGuid().ToString('N')
+          $root = Join-Path $env:RUNNER_TEMP "cp3a2-$nonce"
+          New-Item -ItemType Directory $root | Out-Null
+          $namespace = "Software\Everia-CP3A2-$nonce"
+          @{ root=$root; registry=$namespace; source='${{ github.sha }}'; status='UNPROVEN' } | ConvertTo-Json | Set-Content "$env:EVIDENCE/experiment.json"
+          & "$env:RUNNER_TEMP/cp3a2-build/Release/authority-tests.exe" suite $namespace $root 2>&1 | Tee-Object "$env:EVIDENCE/authority-results.txt"
+          if ($LASTEXITCODE) { throw 'Authority experiment failed; no production approval' }
+          Get-ChildItem $root -Recurse -Force | ForEach-Object {
+            if ($_.PSIsContainer) { [pscustomobject]@{path=$_.FullName.Substring($root.Length);kind='directory'} }
+            else { [pscustomobject]@{path=$_.FullName.Substring($root.Length);kind='file';size=$_.Length;sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash} }
+          } | ConvertTo-Json -Depth 5 | Set-Content "$env:EVIDENCE/filesystem-after.json"
+          'Subset execution success does not imply Checkpoint 3A.2 passed. See explicit missing coverage in prototype output.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Unchanged Checkpoint 2 confinement regression suite
+        run: |
+          $out = Join-Path $env:EVIDENCE 'cp2'
+          New-Item -ItemType Directory $out | Out-Null
+          $env:CP2_EVIDENCE = $out
+          & "$env:RUNNER_TEMP/cp3a2-build/checkpoint2/Release/generation-tests.exe" "$env:RUNNER_TEMP/cp3a2-fixture" fixture 2>&1 | Tee-Object "$out/native-results.txt"
+          if ($LASTEXITCODE) { throw 'CP2 confinement regression failed' }
+      - name: Upload evidence only
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checkpoint3a2-authority-feasibility-evidence
+          path: ${{ runner.temp }}/cp3a2-evidence
+          if-no-files-found: error
+          retention-days: 90
