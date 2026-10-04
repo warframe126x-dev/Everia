@@ -120,9 +120,9 @@ void pinned_authority(const std::wstring& ns, Key& authority) {
   open_key(authority,ns+L"\\Authority"); protected_key(authority.h);
 }
 void populate(HANDLE generation) {
-  auto file=relative(generation,L"payload.txt",false,true,true);
-  auto before=id(file.value); write_small(file.value,payload);
-  check(hash_file(file.value,sizeof(payload)-1)==sha256(payload) && id(file.value)==before,"fixture-verify");
+  auto leaf=relative(generation,L"payload.txt",false,true,true);
+  auto before=id(leaf.value); write_small(leaf.value,payload);
+  check(hash_file(leaf.value,sizeof(payload)-1)==sha256(payload) && id(leaf.value)==before,"fixture-verify");
 }
 void publish(const std::wstring& ns, const std::wstring& parent, const std::string& scope, const std::wstring& intended) {
   auto t=token(); check(scope=="machine" || (scope=="user" && sid_of(t.value)==intended),"elevation-sid-refused");
@@ -133,8 +133,8 @@ void publish(const std::wstring& ns, const std::wstring& parent, const std::stri
   auto versions=relative(root.value,L"Versions",true,true);
   auto anchor=relative(versions.value,L"anchor",true,true);
   populate(anchor.value);
-  auto file=relative(anchor.value,L"payload.txt",false,false);
-  const auto anchor_digest=sha256(id(anchor.value)+"\n"+id(file.value));
+  auto leaf=relative(anchor.value,L"payload.txt",false,false);
+  const auto anchor_digest=sha256(id(anchor.value)+"\n"+id(leaf.value));
   std::vector<std::string> fields={"1","1","Everia-CP3A2-test-domain",narrow(ns.substr(22)),scope,narrow(intended),narrow(canonical(root.value)),"1",id(root.value),id(versions.value),id(anchor.value),build,sha256(payload),anchor_digest,"published","inactive"};
   const auto receipt=pack(fields);
   // No existing-path authorizer: every object bound above came from FILE_CREATE.
@@ -150,9 +150,9 @@ void recognize(const std::wstring& ns, bool add, const std::string& expected_sco
   Chain root(widen(v[6]));
   auto versions=relative(root.leaf(),L"Versions",true,false);
   auto anchor=relative(versions.value,L"anchor",true,false);
-  auto file=relative(anchor.value,L"payload.txt",false,false);
-  check(id(root.leaf())==v[8] && id(versions.value)==v[9] && id(anchor.value)==v[10] && sha256(id(anchor.value)+"\n"+id(file.value))==v[13],"receipt-object-identity");
-  check(enumerate(anchor.value).size()==1 && hash_file(file.value,sizeof(payload)-1)==v[12],"anchor-verification");
+  auto leaf=relative(anchor.value,L"payload.txt",false,false);
+  check(id(root.leaf())==v[8] && id(versions.value)==v[9] && id(anchor.value)==v[10] && sha256(id(anchor.value)+"\n"+id(leaf.value))==v[13],"receipt-object-identity");
+  check(enumerate(anchor.value).size()==1 && hash_file(leaf.value,sizeof(payload)-1)==v[12],"anchor-verification");
   if(add) { auto next=relative(versions.value,L"second",true,true); populate(next.value); }
 }
 DWORD child(const std::vector<std::wstring>& args, HANDLE restricted_token=nullptr) {
@@ -199,7 +199,7 @@ int wmain(int argc,wchar_t** argv) {
     test("restart restricted-reader second create-only generation",[&]{check(child({L"read",ns,L"add",L"user",sid},low.value)==0,"reader-exit");});
     test("repeat generation collision refused",[&]{check(child({L"read",ns,L"add",L"user",sid},low.value)!=0,"collision-adopted");});
     const auto original=get_value(authority.h,L"receipt");
-    for(const auto right:{KEY_SET_VALUE,KEY_CREATE_SUB_KEY,DELETE,WRITE_DAC,WRITE_OWNER}) {
+    for(const auto right:std::vector<REGSAM>{KEY_SET_VALUE,KEY_CREATE_SUB_KEY,DELETE,WRITE_DAC,WRITE_OWNER}) {
       test(("restricted deny access "+std::to_string(right)).c_str(),[&]{
         check(ImpersonateLoggedOnUser(low.value)!=0,"impersonation"); Key attack;
         const auto result=RegOpenKeyExW(HKEY_LOCAL_MACHINE,(ns+L"\\Authority").c_str(),REG_OPTION_OPEN_LINK,right|KEY_WOW64_64KEY,&attack.h);
