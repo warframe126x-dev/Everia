@@ -45,3 +45,29 @@ namespace is only a disposable-test guard, not an application trust anchor.
 Runtime administrator replacement of a receipt is used only to test refusal.
 An administrator is trusted by the proposed model; its ability to recompute
 checksum fields does not prove or disprove authentication by that checksum.
+
+## Completion-only coverage
+
+The completion executable reuses this publisher/recognizer and adds real local
+interactive account logons, loaded user profiles and primary-token child probes.
+It tests two actual standard users and a separate administrator, uses a genuine
+linked UAC token only when Windows provides one, and runs a separate scheduled
+SYSTEM process. Missing UAC or credential-prompt behavior is reported explicitly;
+no synthetic token is substituted. Temporary accounts/tasks exist only on the
+disposable hosted runner and are removed after testing.
+
+The completion workflow builds/runs only the new executable, reusing run
+37211223847 for the 50 original checks and 47 unchanged CP2 regressions.
+No production source is changed. Tests-only reopen synchronization points permit
+substitution/reparse attacks between receipt reading and filesystem reopening,
+and retained-ancestor replacement attempts. The prototype rechecks receipt bytes,
+security and ambiguity before recognition completes. This bounded check does not
+claim an atomic transaction against a malicious administrator or an ABA write.
+
+Snapshots include every disposable filesystem entry and file hash, plus registry
+values, subkeys, owners and DACLs in the private hierarchy. Each attack compares
+its attacked state before/after refusal, then restores only its own fixture and
+checks the original complete snapshot. Standard-user owning-SID recognition uses
+an explicitly labeled administrator-created binding fixture; it is not proof of
+a different-account elevated publication protocol. Actual UAC credential-prompt
+transitions remain manual if CI cannot provide them.

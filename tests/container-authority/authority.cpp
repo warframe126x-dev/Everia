@@ -173,20 +173,30 @@ void publish(const std::wstring& ns, const std::wstring& parent, const std::stri
   publication_barrier(ns,4);
   check(id(root.value)==fields[8] && id(versions.value)==fields[9] && id(anchor.value)==fields[10],"publication-identity");
 }
+// Tests-only synchronization points used by the completion attack harness.
+std::function<void(int)> reopen_hook;
 void recognize(const std::wstring& ns, bool add, const std::string& expected_scope, const std::wstring& sid) {
   Key authority; pinned_authority(ns,authority);
   DWORD keys=0,values=0;
   check(RegQueryInfoKeyW(authority.h,nullptr,nullptr,nullptr,&keys,nullptr,nullptr,&values,nullptr,nullptr,nullptr,nullptr)==ERROR_SUCCESS && keys==0 && values==1,"ambiguous-authority");
-  auto v=unpack(get_value(authority.h,L"receipt"));
+  const auto receipt=get_value(authority.h,L"receipt");
+  auto v=unpack(receipt);
   check(v[0]=="1" && v[1]=="1" && v[2]=="Everia-CP3A2-test-domain" && v[3]==narrow(ns.substr(22)) && v[4]==expected_scope && v[7]=="1" && v[11]==build && v[12]==sha256(payload) && v[14]=="published" && v[15]=="inactive","receipt-contract");
   check((v[4]=="machine" && v[5].empty()) || (v[4]=="user" && v[5]==narrow(sid) && sid_of(token().value)==sid),"receipt-sid");
   disposable_path(widen(v[6]));
+  if(reopen_hook) reopen_hook(0);
   Chain root(widen(v[6]));
+  if(reopen_hook) reopen_hook(1);
   auto versions=relative(root.leaf(),L"Versions",true,false);
   auto anchor=relative(versions.value,L"anchor",true,false);
   auto leaf=relative(anchor.value,L"payload.txt",false,false);
   check(id(root.leaf())==v[8] && id(versions.value)==v[9] && id(anchor.value)==v[10] && sha256(id(anchor.value)+"\n"+id(leaf.value))==v[13],"receipt-object-identity");
   check(enumerate(anchor.value).size()==1 && hash_file(leaf.value,sizeof(payload)-1)==v[12],"anchor-verification");
+  if(reopen_hook) reopen_hook(2);
+  // Fail closed on authority changes observed during this bounded recognition.
+  protected_key(authority.h);
+  check(get_value(authority.h,L"receipt")==receipt,"authority-changed-during-reopen");
+  check(RegQueryInfoKeyW(authority.h,nullptr,nullptr,nullptr,&keys,nullptr,nullptr,&values,nullptr,nullptr,nullptr,nullptr)==ERROR_SUCCESS && keys==0 && values==1,"ambiguous-authority");
   if(add) { auto next=relative(versions.value,L"second",true,true); populate(next.value); }
 }
 DWORD child(const std::vector<std::wstring>& args, HANDLE restricted_token=nullptr, bool terminate=false) {

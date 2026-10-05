@@ -46,11 +46,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python tools/generation/fixture.py "$env:RUNNER_TEMP/cp3a2-fixture"
           if ($LASTEXITCODE) { throw 'Fixture creation failed' }
-          cmake -S tests/container-authority -B "$env:RUNNER_TEMP/cp3a2-build" -A x64 -DEVERIA_GENERATION_TESTS=ON "-DEVERIA_PAYLOAD_DIR=$env:RUNNER_TEMP/cp3a2-fixture" -DEVERIA_SOURCE_SHA=c79b0d26044f0fd057496f62a6cfe443da5b98ff -DEVERIA_BUILD_ID=authority-test-only -DEVERIA_ARCHIVE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          cmake -S tests/container-authority -B "$env:RUNNER_TEMP/cp3a2-build" -A x64 -DEVERIA_GENERATION_TESTS=OFF "-DEVERIA_PAYLOAD_DIR=$env:RUNNER_TEMP/cp3a2-fixture" -DEVERIA_SOURCE_SHA=c79b0d26044f0fd057496f62a6cfe443da5b98ff -DEVERIA_BUILD_ID=authority-test-only -DEVERIA_ARCHIVE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           if ($LASTEXITCODE) { throw 'Configure failed' }
-          cmake --build "$env:RUNNER_TEMP/cp3a2-build" --config Release
+          cmake --build "$env:RUNNER_TEMP/cp3a2-build" --config Release --target authority-completion
           if ($LASTEXITCODE) { throw 'Compile failed' }
-      - name: Protected HKLM64 publication and cross-process reduced-token recognition
+      - name: Missing genuine contexts and combined reopen attacks only
         run: |
           $ErrorActionPreference = 'Stop'
           $nonce = [guid]::NewGuid().ToString('N')
@@ -58,22 +58,49 @@ jobs:
           New-Item -ItemType Directory $root | Out-Null
           $namespace = "Software\Everia-CP3A2-$nonce"
           $env:CP3A2_ROOT = $root
-          @{ root=$root; registry=$namespace; source='${{ github.sha }}'; status='UNPROVEN' } | ConvertTo-Json | Set-Content "$env:EVIDENCE/experiment.json"
-          & "$env:RUNNER_TEMP/cp3a2-build/Release/authority-tests.exe" suite $namespace $root 2>&1 | Tee-Object "$env:EVIDENCE/authority-results.txt"
-          if ($LASTEXITCODE) { throw 'Authority experiment failed; no production approval' }
-          Get-ChildItem $root -Recurse -Force | ForEach-Object {
-            if ($_.PSIsContainer) { [pscustomobject]@{path=$_.FullName.Substring($root.Length);kind='directory'} }
-            else { [pscustomobject]@{path=$_.FullName.Substring($root.Length);kind='file';size=$_.Length;sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash} }
-          } | ConvertTo-Json -Depth 5 | Set-Content "$env:EVIDENCE/filesystem-after.json"
-          'Subset execution success does not imply Checkpoint 3A.2 passed. See explicit missing coverage in prototype output.' >> $env:GITHUB_STEP_SUMMARY
-      - name: Unchanged Checkpoint 2 confinement regression suite
-        if: always() && steps.compile.outcome == 'success'
-        run: |
-          $out = Join-Path $env:EVIDENCE 'cp2'
-          New-Item -ItemType Directory $out | Out-Null
-          $env:CP2_EVIDENCE = $out
-          & "$env:RUNNER_TEMP/cp3a2-build/checkpoint2/Release/generation-tests.exe" (Join-Path $env:RUNNER_TEMP 'cp3a2-fixture') fixture 2>&1 | Tee-Object "$out/native-results.txt"
-          if ($LASTEXITCODE) { throw 'CP2 confinement regression failed' }
+          & icacls.exe $root /grant '*S-1-5-11:(OI)(CI)M' | Out-File "$env:EVIDENCE/fixture-permissions.txt"
+          if ($LASTEXITCODE) { throw 'Disposable fixture permissions failed' }
+          $names = @()
+          try {
+            foreach ($kind in @('OWNER','OTHER','ADMIN')) {
+              $name = 'CP3' + $kind + $nonce.Substring(0,8)
+              $password = 'Aa1!' + [guid]::NewGuid().ToString('N')
+              Write-Output "::add-mask::$password"
+              New-LocalUser -Name $name -Password (ConvertTo-SecureString $password -AsPlainText -Force) -AccountNeverExpires | Out-Null
+              $names += $name
+              Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $name
+              if ($kind -eq 'ADMIN') { Add-LocalGroupMember -SID 'S-1-5-32-544' -Member $name }
+              [Environment]::SetEnvironmentVariable("CP3_$kind",$name,'Process')
+              [Environment]::SetEnvironmentVariable(('CP3_' + $kind + '_PASSWORD'),$password,'Process')
+            }
+            Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name EnableLUA | Format-List | Out-File "$env:EVIDENCE/uac-policy.txt"
+            $exe = "$env:RUNNER_TEMP/cp3a2-build/Release/authority-completion.exe"
+            & $exe completion $namespace $root 2>&1 | Tee-Object "$env:EVIDENCE/completion-results.txt"
+            if ($LASTEXITCODE) { throw 'Missing-coverage harness failed' }
+            $systemScript = Join-Path $env:RUNNER_TEMP "cp3a2-system-$nonce.ps1"
+            @(
+              ("& '{0}' probe '{1}' SYSTEM trusted *> '{2}/system-results.txt'" -f $exe,$namespace,$env:EVIDENCE),
+              'exit $LASTEXITCODE'
+            ) | Set-Content $systemScript
+            $taskName = "Everia-CP3A2-$nonce"
+            $arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $systemScript + '"'
+            $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -Argument $arguments
+            Register-ScheduledTask -TaskName $taskName -Action $action -User SYSTEM -RunLevel Highest -Force | Out-Null
+            try {
+              Start-ScheduledTask -TaskName $taskName
+              $deadline = (Get-Date).AddSeconds(45)
+              do {
+                Start-Sleep -Milliseconds 500
+                $info = Get-ScheduledTaskInfo -TaskName $taskName
+                $task = Get-ScheduledTask -TaskName $taskName
+              } while (($info.LastRunTime.Year -lt 2026 -or $task.State -eq 'Running') -and (Get-Date) -lt $deadline)
+              Get-Content "$env:EVIDENCE/system-results.txt"
+              if ($task.State -eq 'Running' -or $info.LastTaskResult -ne 0) { throw "SYSTEM context failed: $($info.LastTaskResult)" }
+            } finally { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
+            @{ source='${{ github.sha }}'; baseline_run=37211223847; namespace=$namespace; root=$root; decision='UNPROVEN pending evidence review'; no_cp2_rerun=$true } | ConvertTo-Json | Set-Content "$env:EVIDENCE/completion.json"
+          } finally {
+            foreach ($name in $names) { Remove-LocalUser -Name $name -ErrorAction Continue }
+          }
       - name: Upload evidence only
         if: always()
         uses: actions/upload-artifact@v7
