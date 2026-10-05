@@ -292,4 +292,3 @@ int wmain(int argc,wchar_t** argv) {
     return 0;
   } catch(const std::exception& e) {std::cerr<<"COMPLETION_REFUSED "<<e.what()<<" win32="<<GetLastError()<<std::endl;return 2;}
 }
-
