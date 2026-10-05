@@ -76,3 +76,12 @@ checks the original complete snapshot. Standard-user owning-SID recognition uses
 an explicitly labeled administrator-created binding fixture; it is not proof of
 a different-account elevated publication protocol. Actual UAC credential-prompt
 transitions remain manual if CI cannot provide them.
+
+The context-only follow-up reuses the passing combined-attack evidence from
+run 37290098193. It reads enabled/deny-only group attributes directly from the
+effective token and enables the runner's existing impersonation privilege only
+for the test launcher. No user token privileges/groups are manually weakened.
+It checks mutation rights on the actual private suite ancestor as well as a
+delete/recreate sentinel with the same protected descriptor. Complete filesystem
+and private-registry before/after manifests are saved; two existing generations,
+an unknown directory/file and external canary are covered.

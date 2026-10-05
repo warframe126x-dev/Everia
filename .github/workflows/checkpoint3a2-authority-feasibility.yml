@@ -75,8 +75,8 @@ jobs:
             }
             Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name EnableLUA | Format-List | Out-File "$env:EVIDENCE/uac-policy.txt"
             $exe = "$env:RUNNER_TEMP/cp3a2-build/Release/authority-completion.exe"
-            & $exe completion $namespace $root 2>&1 | Tee-Object "$env:EVIDENCE/completion-results.txt"
-            if ($LASTEXITCODE) { throw 'Missing-coverage harness failed' }
+            & $exe contexts $namespace $root 2>&1 | Tee-Object "$env:EVIDENCE/completion-results.txt"
+            $contextExit = $LASTEXITCODE
             $systemScript = Join-Path $env:RUNNER_TEMP "cp3a2-system-$nonce.ps1"
             @(
               ("& '{0}' probe '{1}' SYSTEM trusted *> '{2}/system-results.txt'" -f $exe,$namespace,$env:EVIDENCE),
@@ -97,6 +97,7 @@ jobs:
               Get-Content "$env:EVIDENCE/system-results.txt"
               if ($task.State -eq 'Running' -or $info.LastTaskResult -ne 0) { throw "SYSTEM context failed: $($info.LastTaskResult)" }
             } finally { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
+            if ($contextExit) { throw 'Genuine-context checks failed; see saved evidence' }
             @{ source='${{ github.sha }}'; baseline_run=37211223847; namespace=$namespace; root=$root; decision='UNPROVEN pending evidence review'; no_cp2_rerun=$true } | ConvertTo-Json | Set-Content "$env:EVIDENCE/completion.json"
           } finally {
             foreach ($name in $names) { Remove-LocalUser -Name $name -ErrorAction Continue }

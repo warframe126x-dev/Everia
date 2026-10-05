@@ -58,7 +58,11 @@ void log_token(const std::wstring& label,bool expected_trusted) {
   check(GetTokenInformation(t.value,TokenElevationType,&type,sizeof(type),&size)!=0,"context-elevation-type");
   BYTE admin[SECURITY_MAX_SID_SIZE]; DWORD len=sizeof(admin);
   check(CreateWellKnownSid(WinBuiltinAdministratorsSid,nullptr,admin,&len)!=0,"context-admin-sid");
-  BOOL member=FALSE; check(CheckTokenMembership(nullptr,admin,&member)!=0,"context-admin-membership");
+  DWORD group_bytes=0; GetTokenInformation(t.value,TokenGroups,nullptr,0,&group_bytes);
+  Bytes groups(group_bytes); check(GetTokenInformation(t.value,TokenGroups,groups.data(),group_bytes,&group_bytes)!=0,"context-groups");
+  auto* list=reinterpret_cast<TOKEN_GROUPS*>(groups.data()); BOOL member=FALSE;
+  for(DWORD i=0;i<list->GroupCount;++i) if(EqualSid(list->Groups[i].Sid,admin) &&
+      (list->Groups[i].Attributes&SE_GROUP_ENABLED) && !(list->Groups[i].Attributes&SE_GROUP_USE_FOR_DENY_ONLY)) member=TRUE;
   const bool system=sid_of(t.value)==L"S-1-5-18";
   TOKEN_TYPE token_type{}; check(GetTokenInformation(t.value,TokenType,&token_type,sizeof(token_type),&size)!=0,"context-token-type");
   std::cout<<"CONTEXT "<<narrow(label)<<" pid="<<GetCurrentProcessId()<<" token_type="<<token_type<<" SID="<<narrow(sid_of(t.value))
@@ -74,6 +78,11 @@ void status(const char* operation,LSTATUS result,bool trusted) {
 void context_probe(const std::wstring& ns,const std::wstring& label,bool trusted) {
   validate_namespace(ns); log_token(label,trusted);
   Key suite; open_key(suite,ns); const auto before=registry_snapshot(suite.h);
+  for(const auto rights:{DELETE,KEY_CREATE_SUB_KEY,WRITE_DAC,WRITE_OWNER}) {
+    Key ancestor_rights;
+    status(("actual-suite-ancestor-right-"+std::to_string(rights)).c_str(),
+      RegOpenKeyExW(HKEY_LOCAL_MACHINE,ns.c_str(),REG_OPTION_OPEN_LINK,rights|KEY_WOW64_64KEY,&ancestor_rights.h),trusted);
+  }
   Key read; open_key(read,ns+L"\\Authority"); protected_key(read.h);
   const auto receipt=get_value(read.h,L"receipt"); std::cout<<"ACCESS legitimate-read result=0\n";
   Key write; const auto r=RegOpenKeyExW(HKEY_LOCAL_MACHINE,(ns+L"\\Authority").c_str(),0,KEY_SET_VALUE|KEY_WOW64_64KEY,&write.h);
@@ -130,7 +139,7 @@ struct Profile {
   std::wstring name;
   Profile(HANDLE user_token,const wchar_t* variable):user(user_token),name(env(variable)) {
     auto own=token(TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY);
-    for(const auto privilege:{SE_BACKUP_NAME,SE_RESTORE_NAME}) {
+    for(const auto privilege:{SE_BACKUP_NAME,SE_RESTORE_NAME,SE_IMPERSONATE_NAME}) {
       TOKEN_PRIVILEGES p{}; p.PrivilegeCount=1;
       check(LookupPrivilegeValueW(nullptr,privilege,&p.Privileges[0].Luid)!=0,"profile-privilege");
       p.Privileges[0].Attributes=SE_PRIVILEGE_ENABLED;
@@ -153,7 +162,7 @@ bool mount_to(const std::wstring& path,const std::wstring& target) {
   memcpy(m->data,sub.data(),a); memcpy(reinterpret_cast<BYTE*>(m->data)+m->printOffset,target.data(),b);
   DWORD size=0; return DeviceIoControl(h.value,FSCTL_SET_REPARSE_POINT,bytes.data(),static_cast<DWORD>(bytes.size()),nullptr,0,&size,nullptr)!=0;
 }
-void completion(const std::wstring& ns,const std::wstring& base) {
+void completion(const std::wstring& ns,const std::wstring& base,bool contexts_only=false) {
   validate_namespace(ns); disposable_path(base+L"\\selected");
   Key suite; make_key(suite,HKEY_LOCAL_MACHINE,ns);
   Key authority; make_key(authority,suite.h,L"Authority");
@@ -164,13 +173,19 @@ void completion(const std::wstring& ns,const std::wstring& base) {
   fs::create_directory(base+L"\\selected"); publish(ns,base+L"\\selected","machine",L"");
   const auto original=get_value(authority.h,L"receipt");
   const auto root=widen(unpack(original)[6]); const auto versions=root+L"\\Versions"; const auto anchor=versions+L"\\anchor";
+  fs::create_directory(versions+L"\\existing");
+  {std::ofstream(versions+L"\\existing\\retained.txt",std::ios::binary)<<"existing generation bytes";}
   fs::create_directories(root+L"\\unknown-directory");
   { std::ofstream(base+L"\\external-canary.txt")<<"external sentinel";
     std::ofstream(root+L"\\unknown-directory\\neighbor.txt")<<"unknown neighbor bytes"; }
   const auto before_fs=filesystem_snapshot(base),before_reg=registry_snapshot(suite.h);
+  {std::ofstream(env(L"EVIDENCE")+L"\\filesystem-before.txt",std::ios::binary)<<before_fs;
+   std::ofstream(env(L"EVIDENCE")+L"\\registry-before.txt",std::ios::binary)<<before_reg;}
   auto preserve=[&] {
     check(filesystem_snapshot(base)==before_fs,"completion-filesystem-preservation");
     check(registry_snapshot(suite.h)==before_reg,"completion-registry-preservation");
+    {std::ofstream(env(L"EVIDENCE")+L"\\filesystem-after.txt",std::ios::binary)<<filesystem_snapshot(base);
+     std::ofstream(env(L"EVIDENCE")+L"\\registry-after.txt",std::ios::binary)<<registry_snapshot(suite.h);}
     std::cout<<"PRESERVED filesystem="<<sha256(before_fs)<<" registry="<<sha256(before_reg)<<std::endl;
   };
   test("genuine elevated runner administrator access",[&]{context_probe(ns,L"elevated-runner",true);preserve();});
@@ -211,6 +226,10 @@ void completion(const std::wstring& ns,const std::wstring& base) {
     fs::remove(base+L"\\wrong-owner"); preserve();
   });
   std::cout<<"LIMITATION Actual credential-prompt different-account UAC elevation remains real-PC/manual; SID mismatch above is contract proof only\n";
+  if(contexts_only) {
+    std::cout<<"CONTEXTS_ONLY_RESULT passed="<<passed<<" failed="<<failed<<"; combined attacks reused from run 37290098193\n";
+    check(failed==0,"contexts-failed");return;
+  }
   for(const auto& entry:std::vector<std::pair<std::wstring,std::string>>{{root,"container"},{versions,"Versions"},{anchor,"missing-anchor"}}) {
     test(("valid ledger plus replaced "+entry.second).c_str(),[&]{
       const auto moved=entry.first+L"-saved";
@@ -269,7 +288,7 @@ int wmain(int argc,wchar_t** argv) {
     if(mode==L"publish") {check(argc==6,"publisher-args");publish(argv[2],argv[3],narrow(argv[4]),argv[5]);}
     else if(mode==L"probe") {check(argc==5,"probe-args");context_probe(argv[2],argv[3],std::wstring(argv[4])==L"trusted");}
     else if(mode==L"recognize") {check(argc==5,"recognize-args");recognize(argv[2],false,narrow(argv[3]),argv[4]);}
-    else {check(mode==L"completion" && argc==4,"completion-mode");completion(argv[2],argv[3]);}
+    else {check((mode==L"completion" || mode==L"contexts") && argc==4,"completion-mode");completion(argv[2],argv[3],mode==L"contexts");}
     return 0;
   } catch(const std::exception& e) {std::cerr<<"COMPLETION_REFUSED "<<e.what()<<" win32="<<GetLastError()<<std::endl;return 2;}
 }
