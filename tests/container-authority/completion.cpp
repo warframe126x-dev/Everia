@@ -78,7 +78,7 @@ void status(const char* operation,LSTATUS result,bool trusted) {
 void context_probe(const std::wstring& ns,const std::wstring& label,bool trusted) {
   validate_namespace(ns); log_token(label,trusted);
   Key suite; open_key(suite,ns); const auto before=registry_snapshot(suite.h);
-  for(const auto rights:{DELETE,KEY_CREATE_SUB_KEY,WRITE_DAC,WRITE_OWNER}) {
+  for(const auto rights:std::vector<REGSAM>{DELETE,KEY_CREATE_SUB_KEY,WRITE_DAC,WRITE_OWNER}) {
     Key ancestor_rights;
     status(("actual-suite-ancestor-right-"+std::to_string(rights)).c_str(),
       RegOpenKeyExW(HKEY_LOCAL_MACHINE,ns.c_str(),REG_OPTION_OPEN_LINK,rights|KEY_WOW64_64KEY,&ancestor_rights.h),trusted);
@@ -292,3 +292,4 @@ int wmain(int argc,wchar_t** argv) {
     return 0;
   } catch(const std::exception& e) {std::cerr<<"COMPLETION_REFUSED "<<e.what()<<" win32="<<GetLastError()<<std::endl;return 2;}
 }
+
