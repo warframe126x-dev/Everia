@@ -53,14 +53,15 @@ std::string filesystem_snapshot(const std::wstring& base) {
   return result;
 }
 void log_token(const std::wstring& label,bool expected_trusted) {
-  auto t=token(); DWORD size=0; TOKEN_ELEVATION e{}; TOKEN_ELEVATION_TYPE type{};
+  auto t=effective_token(); DWORD size=0; TOKEN_ELEVATION e{}; TOKEN_ELEVATION_TYPE type{};
   check(GetTokenInformation(t.value,TokenElevation,&e,sizeof(e),&size)!=0,"context-elevation");
   check(GetTokenInformation(t.value,TokenElevationType,&type,sizeof(type),&size)!=0,"context-elevation-type");
   BYTE admin[SECURITY_MAX_SID_SIZE]; DWORD len=sizeof(admin);
   check(CreateWellKnownSid(WinBuiltinAdministratorsSid,nullptr,admin,&len)!=0,"context-admin-sid");
   BOOL member=FALSE; check(CheckTokenMembership(nullptr,admin,&member)!=0,"context-admin-membership");
   const bool system=sid_of(t.value)==L"S-1-5-18";
-  std::cout<<"CONTEXT "<<narrow(label)<<" pid="<<GetCurrentProcessId()<<" SID="<<narrow(sid_of(t.value))
+  TOKEN_TYPE token_type{}; check(GetTokenInformation(t.value,TokenType,&token_type,sizeof(token_type),&size)!=0,"context-token-type");
+  std::cout<<"CONTEXT "<<narrow(label)<<" pid="<<GetCurrentProcessId()<<" token_type="<<token_type<<" SID="<<narrow(sid_of(t.value))
            <<" elevation="<<e.TokenIsElevated<<" type="<<type<<" admin_enabled="<<member<<" system="<<system<<std::endl;
   check((system || member)==expected_trusted,"context-class-mismatch");
   if(label==L"SYSTEM") check(system,"not-system");
@@ -90,7 +91,7 @@ void context_probe(const std::wstring& ns,const std::wstring& label,bool trusted
     Key security; auto result=RegOpenKeyExW(HKEY_LOCAL_MACHINE,(ns+L"\\Authority").c_str(),0,rights|KEY_WOW64_64KEY,&security.h);
     status(rights==WRITE_DAC?"security-dacl-handle":"security-owner-handle",result,trusted);
     PSECURITY_DESCRIPTOR weak=nullptr;
-    const auto sddl=rights==WRITE_DAC?L"O:BAD:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)(A;CI;KA;;;AU)":(L"O:"+sid_of(token().value)+L"D:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)(A;CI;KR;;;AU)");
+    const auto sddl=rights==WRITE_DAC?L"O:BAD:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)(A;CI;KA;;;AU)":(L"O:"+sid_of(effective_token().value)+L"D:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)(A;CI;KR;;;AU)");
     check(ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(),SDDL_REVISION_1,&weak,nullptr)!=0,"probe-security");
     const auto info=rights==WRITE_DAC?DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION:OWNER_SECURITY_INFORMATION;
     status(rights==WRITE_DAC?"weaken-dacl":"change-owner",RegSetKeySecurity(trusted?security.h:read.h,info,weak),trusted);
@@ -119,6 +120,10 @@ Handle logon(const wchar_t* user,const wchar_t* password) {
   check(LogonUserW(env(user).c_str(),L".",env(password).c_str(),LOGON32_LOGON_INTERACTIVE,LOGON32_PROVIDER_DEFAULT,&h)!=0,"genuine-logon");
   return Handle(h);
 }
+struct Impersonation {
+  explicit Impersonation(HANDLE user) {check(ImpersonateLoggedOnUser(user)!=0,"genuine-token-impersonation");}
+  ~Impersonation(){RevertToSelf();}
+};
 struct Profile {
   HANDLE user;
   PROFILEINFOW info{};
@@ -172,27 +177,31 @@ void completion(const std::wstring& ns,const std::wstring& base) {
   auto owner=logon(L"CP3_OWNER",L"CP3_OWNER_PASSWORD");
   auto other=logon(L"CP3_OTHER",L"CP3_OTHER_PASSWORD");
   Profile owner_profile(owner.value,L"CP3_OWNER"),other_profile(other.value,L"CP3_OTHER");
-  test("genuine standard intended-owner authority access",[&]{check(child({L"probe",ns,L"standard-owner",L"denied"},owner.value)==0,"standard-owner-process");preserve();});
-  test("genuine other standard-user authority access",[&]{check(child({L"probe",ns,L"other-standard",L"denied"},other.value)==0,"other-user-process");preserve();});
+  test("genuine standard intended-owner authority access",[&]{{Impersonation context(owner.value);context_probe(ns,L"standard-owner",false);}preserve();});
+  test("genuine other standard-user authority access",[&]{{Impersonation context(other.value);context_probe(ns,L"other-standard",false);}preserve();});
   auto admin=logon(L"CP3_ADMIN",L"CP3_ADMIN_PASSWORD");
   Profile admin_profile(admin.value,L"CP3_ADMIN");
   TOKEN_ELEVATION_TYPE type{}; DWORD n=0;
   check(GetTokenInformation(admin.value,TokenElevationType,&type,sizeof(type),&n)!=0,"admin-logon-type");
   TOKEN_LINKED_TOKEN link{};
   if(type==TokenElevationTypeLimited) {
-    test("genuine UAC-filtered administrator access",[&]{check(child({L"probe",ns,L"UAC-filtered",L"denied"},admin.value)==0,"uac-process");preserve();});
+    test("genuine UAC-filtered administrator access",[&]{{Impersonation context(admin.value);context_probe(ns,L"UAC-filtered",false);}preserve();});
     check(GetTokenInformation(admin.value,TokenLinkedToken,&link,sizeof(link),&n)!=0,"admin-linked-token"); Handle full(link.LinkedToken);
-    test("genuine linked elevated administrator access",[&]{check(child({L"probe",ns,L"linked-elevated",L"trusted"},full.value)==0,"linked-elevated-process");preserve();});
+    // Request an independently access-checked handle; linked handles can lack launch rights.
+    HANDLE usable{};
+    check(DuplicateHandle(GetCurrentProcess(),full.value,GetCurrentProcess(),&usable,TOKEN_QUERY|TOKEN_DUPLICATE,FALSE,0)!=0,"linked-handle-rights");
+    Handle elevated(usable);
+    test("genuine linked elevated administrator access",[&]{{Impersonation context(elevated.value);context_probe(ns,L"linked-elevated",true);}preserve();});
   } else {
     std::cout<<"LIMITATION UAC-filtered unavailable: actual admin interactive logon type="<<type<<"; no synthetic substitute\n";
-    test("genuine separate administrator access",[&]{check(child({L"probe",ns,L"separate-admin",L"trusted"},admin.value)==0,"admin-process");preserve();});
+    test("genuine separate administrator access",[&]{{Impersonation context(admin.value);context_probe(ns,L"separate-admin",true);}preserve();});
   }
   // The trusted fixture binds an existing publisher-created tree to the actual owner SID.
   // This measures read/SID separation only, not a cross-account publisher protocol.
   test("actual owning-user SID read and other-user refusal",[&]{
     auto fields=unpack(original); fields[4]="user"; fields[5]=narrow(sid_of(owner.value)); set_value(authority.h,L"receipt",pack(fields));
-    check(child({L"recognize",ns,L"user",sid_of(owner.value)},owner.value)==0,"owning-reader");
-    check(child({L"recognize",ns,L"user",sid_of(owner.value)},other.value)==2,"other-sid-not-refused");
+    {Impersonation context(owner.value);recognize(ns,false,"user",sid_of(owner.value));}
+    {Impersonation context(other.value);refusal([&]{recognize(ns,false,"user",sid_of(owner.value));});}
     set_value(authority.h,L"receipt",original); preserve();
   });
   test("different actual intended SID publisher refuses reassignment",[&]{
@@ -212,6 +221,12 @@ void completion(const std::wstring& ns,const std::wstring& base) {
       fs::remove(entry.first); fs::rename(moved,entry.first); preserve();
     });
   }
+  test("valid ledger plus entirely missing anchor generation",[&]{
+    fs::rename(anchor,anchor+L"-saved");
+    const auto attack=filesystem_snapshot(base); refusal([&]{recognize(ns,true,"machine",L"");});
+    check(filesystem_snapshot(base)==attack,"missing-anchor-refusal-mutation");
+    fs::rename(anchor+L"-saved",anchor); preserve();
+  });
   test("ledger-valid modified anchor reopen refuses without further mutation",[&]{
     { std::ofstream(anchor+L"\\payload.txt",std::ios::binary|std::ios::trunc)<<"tampered"; }
     const auto attack=filesystem_snapshot(base); refusal([&]{recognize(ns,true,"machine",L"");});

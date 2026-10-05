@@ -47,6 +47,12 @@ std::wstring sid_of(HANDLE token) {
 Handle token(DWORD access=TOKEN_QUERY) {
   HANDLE h{}; check(OpenProcessToken(GetCurrentProcess(), access, &h) != 0, "process-token"); return Handle(h);
 }
+Handle effective_token() {
+  HANDLE h{};
+  if(OpenThreadToken(GetCurrentThread(),TOKEN_QUERY,TRUE,&h)) return Handle(h);
+  check(GetLastError()==ERROR_NO_TOKEN,"effective-token-query");
+  return token();
+}
 Handle restricted() {
   // Returned restricted-token handle inherits the original handle's granted
   // access. Child launch needs ASSIGN_PRIMARY/DUPLICATE; readers need QUERY only.
@@ -182,7 +188,7 @@ void recognize(const std::wstring& ns, bool add, const std::string& expected_sco
   const auto receipt=get_value(authority.h,L"receipt");
   auto v=unpack(receipt);
   check(v[0]=="1" && v[1]=="1" && v[2]=="Everia-CP3A2-test-domain" && v[3]==narrow(ns.substr(22)) && v[4]==expected_scope && v[7]=="1" && v[11]==build && v[12]==sha256(payload) && v[14]=="published" && v[15]=="inactive","receipt-contract");
-  check((v[4]=="machine" && v[5].empty()) || (v[4]=="user" && v[5]==narrow(sid) && sid_of(token().value)==sid),"receipt-sid");
+  check((v[4]=="machine" && v[5].empty()) || (v[4]=="user" && v[5]==narrow(sid) && sid_of(effective_token().value)==sid),"receipt-sid");
   disposable_path(widen(v[6]));
   if(reopen_hook) reopen_hook(0);
   Chain root(widen(v[6]));

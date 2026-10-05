@@ -54,7 +54,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $nonce = [guid]::NewGuid().ToString('N')
-          $root = Join-Path $env:RUNNER_TEMP "cp3a2-$nonce"
+          $root = Join-Path $env:PUBLIC "cp3a2-$nonce"
           New-Item -ItemType Directory $root | Out-Null
           $namespace = "Software\Everia-CP3A2-$nonce"
           $env:CP3A2_ROOT = $root

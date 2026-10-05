@@ -49,7 +49,12 @@ checksum fields does not prove or disprove authentication by that checksum.
 ## Completion-only coverage
 
 The completion executable reuses this publisher/recognizer and adds real local
-interactive account logons, loaded user profiles and primary-token child probes.
+interactive account logons and loaded user profiles. Effective registry/file
+access is tested while impersonating these genuine OS-issued tokens, not by
+manually restricting a runner token. Token type is logged explicitly. SYSTEM and
+the runner administrator are genuine primary-process contexts. Account process
+launches in the first completion attempt timed out; this correction avoids that
+unproven desktop/session launch path rather than counting those attempts as proof.
 It tests two actual standard users and a separate administrator, uses a genuine
 linked UAC token only when Windows provides one, and runs a separate scheduled
 SYSTEM process. Missing UAC or credential-prompt behavior is reported explicitly;
